@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>scrubnurse_bringup</name>
+  <version>0.1.0</version>
+  <description>Launch files and cell configuration for the Scrubnurse (real robot, mock hardware, simulation).</description>
+  <maintainer email="jabh00002@stud.uni-saarland.de">Jay Bhagiya</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>scrubnurse_control</exec_depend>
+  <exec_depend>scrubnurse_perception</exec_depend>
+  <exec_depend>scrubnurse_sim</exec_depend>
+  <exec_depend>scrubnurse_voice</exec_depend>
+  <exec_depend>ur_calibration</exec_depend>
+  <exec_depend>ur_description</exec_depend>
+  <exec_depend>ur_moveit_config</exec_depend>
+  <exec_depend>ur_robot_driver</exec_depend>
+  <exec_depend>ur_simulation_gz</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

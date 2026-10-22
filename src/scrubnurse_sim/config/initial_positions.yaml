@@ -1,0 +1,7 @@
+# Simulation start: the recorded joint angles of home pose H (poses.yaml).
+shoulder_pan_joint: -2.779486958180563
+shoulder_lift_joint: -1.7782851658263148
+elbow_joint: -1.2971723079681396
+wrist_1_joint: -1.6375652752318324
+wrist_2_joint: 1.558917760848999
+wrist_3_joint: 0.3632694482803345

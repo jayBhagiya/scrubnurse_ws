@@ -1,0 +1,4 @@
+# Azure Kinect camera node (scrubnurse_perception kinect_camera). pyk4a builds from
+# source against the Azure Kinect SDK (libk4a1.4-dev), so install the SDK first;
+# scripts/setup_venv.sh installs this file only where the SDK headers exist.
+pyk4a==1.5.0

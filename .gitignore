@@ -1,0 +1,16 @@
+# colcon
+build/
+install/
+log/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Ultralytics run outputs
+runs/
+
+# Editor settings (machine-specific)
+.vscode/

@@ -1,0 +1,19 @@
+# Overrides for the Gazebo cell, loaded after scrubnurse.yaml by sim.launch.py.
+
+tool_localizer:
+  ros__parameters:
+    # Simulated overhead camera (straight down, 1920x1080, 90 deg HFOV, at (0.016, -1.0, 0.671)
+    # in base) onto the tool centres at z = 0.101. Generated with
+    # scrubnurse_sim.cell.OverheadCamera().homography(); test_cell.py checks they still match.
+    homography: [0.0, -0.00059375, 0.336625, -0.00059375, 0.0, -0.43, 0.0, 0.0, 1.0]
+
+scrubnurse_controller:
+  ros__parameters:
+    step_mode: false
+    home_pose: H
+    gripper:
+      backend: action
+      action_name: /gripper_controller/gripper_cmd
+      open_position: 0.0
+      closed_position: 0.025
+      max_effort: 20.0

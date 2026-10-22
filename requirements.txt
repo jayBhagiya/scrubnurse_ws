@@ -1,0 +1,25 @@
+# Python packages that are not available through rosdep/apt.
+# Installed into the workspace venv by scripts/setup_venv.sh; everything else
+# (rclpy, cv_bridge, numpy, scipy, opencv for ROS, ...) comes from apt via rosdep.
+
+# PyTorch: scripts/setup_venv.sh installs these versions from the build that fits the
+# machine (CUDA 12.8, CUDA 12.6 or CPU), so no GPU is required.
+torch==2.11.0
+torchvision==0.26.0
+
+# Keep NumPy 1.x: ROS 2 Humble's compiled Python modules (rclpy, cv_bridge) are
+# built against NumPy 1.x and break with NumPy 2.
+numpy==1.26.4
+# Last opencv-python release that supports NumPy 1.x.
+opencv-python==4.11.0.86
+
+# Tool detection (YOLO segmentation)
+ultralytics==8.4.183
+
+# Voice commands
+openai-whisper==20250625
+# Whisper's numba needs coverage >= 7; without this the venv sees Ubuntu's
+# python3-coverage 6.2 through --system-site-packages and fails to import.
+coverage==7.16.2
+sounddevice==0.5.6
+soundfile==0.14.0

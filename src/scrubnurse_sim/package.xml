@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>scrubnurse_sim</name>
+  <version>0.1.0</version>
+  <description>Gazebo (Fortress) simulation of the Scrubnurse cell: UR10e with a parallel gripper, table, magazine, overhead camera and ground-truth tool detection.</description>
+  <maintainer email="jabh00002@stud.uni-saarland.de">Jay Bhagiya</maintainer>
+  <license>TODO</license>
+
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>gripper_controllers</exec_depend>
+  <exec_depend>ign_ros2_control</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+  <exec_depend>joint_trajectory_controller</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>position_controllers</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>ros_gz_sim</exec_depend>
+  <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>tf2_ros_py</exec_depend>
+  <exec_depend>ur_description</exec_depend>
+  <exec_depend>ur_simulation_gz</exec_depend>
+  <exec_depend>vision_msgs</exec_depend>
+  <exec_depend>xacro</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,0 +1,75 @@
+# Parameters of the Scrubnurse nodes on the real cell.
+# Simulation overrides live in sim.yaml (loaded after this file).
+
+kinect_camera:
+  ros__parameters:
+    # Overhead Azure Kinect of the cell (ROS 1: media_streamer/kinect_camera.launch).
+    serial: ""
+    color_resolution: RES_1080P
+    color_format: COLOR_MJPG
+    depth_mode: WFOV_2X2BINNED
+    fps: FPS_30
+    synchronized_images_only: true
+    publish_depth: true
+    frame_id: rgb_camera_link
+
+tool_detector:
+  ros__parameters:
+    device: cuda:0
+    image_size: 640
+    confidence_threshold: 0.5
+    # Model class index -> tool id, and the tools whose heading needs flipping.
+    class_ids: [A, B, C, D, E, F]
+    flip_orientation_ids: [E, F]
+    # Table work area in the 1920x1080 overhead image (x, y pairs).
+    use_roi: true
+    roi_polygon: [563, 834, 1241, 838, 1252, 228, 562, 222]
+    rate: 15.0
+    publish_annotated: true
+    display: false
+
+tool_localizer:
+  ros__parameters:
+    # Cell coordinates (poses.yaml, homography) are in the UR `base` frame, not base_link.
+    frame_id: base
+    # Pixel -> base homography calibrated on 2024-11-22
+    # (ROS 1: od_homography/config/tf-scrubnurse-22-11-2024.json).
+    # Recompute with: ros2 run scrubnurse_perception compute_homography pairs.csv
+    homography: [1.0163595831671571e-05, -0.0006197696797893486, 0.3398135029914868, -0.0006014182940706726, 4.1451986390270245e-05, -0.4024938848671156, -1.577423913888336e-05, -5.1868361319957846e-05, 1.0]
+
+voice_command:
+  ros__parameters:
+    model: medium.en
+    device: cuda
+    record_seconds: 5.0
+    tool_ids: [A, B, C, D, E, F]
+    tool_names: [pointed scissors, needle holder, mosquito, scalpel, anatomical forceps, surgical forceps]
+    similarity_threshold: 0.75
+
+scrubnurse_controller:
+  ros__parameters:
+    tool_ids: [A, B, C, D, E, F]
+    group_name: ur_manipulator
+    base_frame: base
+    end_effector_link: tool0
+    velocity_scaling: 0.1
+    acceleration_scaling: 0.1
+    min_cartesian_fraction: 0.95
+    # A single arm motion taking longer than this is cancelled (seconds).
+    motion_timeout: 60.0
+    start_paused: true
+    step_mode: true
+    home_pose: ""
+    detection_timeout: 1.0
+    settle_time: 0.5
+    # Table area the camera watches; tools put down here are returned to the magazine.
+    return_area: [-0.18, -1.20, 0.22, -0.75]
+    approach_height: 0.38
+    grasp_height:
+      x_range: [-0.18, 0.22]
+      y_range: [-0.75, -1.2]
+      z_at_y0: [0.24615, 0.24691]
+      z_at_y1: [0.24810, 0.24900]
+    gripper:
+      backend: robotiq_socket
+      port: 63352
