@@ -55,8 +55,8 @@ scrubnurse_controller:
     velocity_scaling: 0.1
     acceleration_scaling: 0.1
     min_cartesian_fraction: 0.95
-    # A single arm motion taking longer than this is cancelled (seconds).
-    motion_timeout: 60.0
+    # An arm motion running this much longer than planned is cancelled (seconds).
+    motion_timeout: 10.0
     start_paused: true
     step_mode: true
     home_pose: ""

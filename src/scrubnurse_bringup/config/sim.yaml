@@ -11,6 +11,9 @@ scrubnurse_controller:
   ros__parameters:
     step_mode: false
     home_pose: H
+    # Faster than the real cell (0.1) so demos don't drag.
+    velocity_scaling: 0.5
+    acceleration_scaling: 0.5
     gripper:
       backend: action
       action_name: /gripper_controller/gripper_cmd

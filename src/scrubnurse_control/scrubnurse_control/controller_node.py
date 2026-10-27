@@ -80,7 +80,7 @@ class ScrubnurseController(Node):
             velocity_scaling=param('velocity_scaling', 0.1),
             acceleration_scaling=param('acceleration_scaling', 0.1),
             min_cartesian_fraction=param('min_cartesian_fraction', 0.95),
-            motion_timeout=param('motion_timeout', 60.0),
+            motion_timeout=param('motion_timeout', 10.0),
             should_stop=stop_event.is_set)
         self._gripper = self._make_gripper(callback_group)
         self._runner = TaskRunner(arm, self._gripper, self._poses, self._workcell,

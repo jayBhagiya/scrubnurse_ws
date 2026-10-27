@@ -338,7 +338,7 @@ Parameters you are most likely to change:
 |---|---|---|---|
 | `scrubnurse_controller` | `velocity_scaling` | 0.1 | Arm speed (0–1), applied to every motion |
 | | `start_paused`, `step_mode` | true | Wait for `~/resume` at start / after every task |
-| | `motion_timeout` | 60.0 | Cancel a single motion that takes longer (s) |
+| | `motion_timeout` | 10.0 | Cancel a motion running this much longer than planned (s) |
 | | `gripper.host`, `gripper.port` | `robot_ip`, 63352 | Robotiq URCap socket |
 | | `return_area` | x −0.18..0.22, y −1.20..−0.75 | Table area whose tools are returned |
 | `tool_detector` | `device` | cuda:0 | `cpu` if there is no GPU (also falls back automatically) |
@@ -437,8 +437,8 @@ matrix to 1.4 mm on average.
 - **Partial paths:** a straight-line path only runs if at least 95% of it could be planned. ROS 1
   executed partial paths.
 - **Speed:** the default arm speed is 10% (`velocity_scaling`), and it also applies to straight-line
-  moves. pymoveit2 leaves the Cartesian-path scaling at 0, which MoveIt runs at full speed, so the
-  controller sets it explicitly.
+  moves. On Humble, MoveIt returns straight-line paths timed at full speed, so the controller
+  retimes them to `velocity_scaling` before executing.
 - **Stale detections:** a detection is only used if it is less than 1 s old and the image was taken
   after the arm stopped moving. ROS 1 kept re-publishing the last detection forever.
 - **Return area:** a tool outside the return area no longer blocks the tools that are inside it.
