@@ -106,9 +106,17 @@ class RecorderWindow:
 
     def _start(self):
         self._button.config(text='Recording', state='disabled', bg='red')
-        threading.Thread(target=lambda: self._results.put(self._node.listen()),
-                         daemon=True).start()
+        threading.Thread(target=self._listen, daemon=True).start()
         self._countdown(int(self._node.record_seconds))
+
+    def _listen(self):
+        try:
+            text, tool_id = self._node.listen()
+            result = f'{text.strip()}  ->  {tool_id or "no tool matched"}'
+        except Exception as e:  # microphone or Whisper failure; the button must come back
+            self._node.get_logger().error(f'recording failed: {e}')
+            result = f'Error: {e}'
+        self._results.put(result)
 
     def _countdown(self, remaining):
         if str(self._button['state']) != 'disabled':
@@ -124,9 +132,9 @@ class RecorderWindow:
             self.root.destroy()
             return
         try:
-            text, tool_id = self._results.get_nowait()
+            result = self._results.get_nowait()
             self._button.config(text='Start Recording', state='normal', bg='green')
-            self._label.config(text=f'{text.strip()}  ->  {tool_id or "no tool matched"}')
+            self._label.config(text=result)
         except queue.Empty:
             pass
         self.root.after(100, self._poll)

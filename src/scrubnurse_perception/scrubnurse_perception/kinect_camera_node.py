@@ -103,12 +103,24 @@ class KinectCamera(Node):
         raise RuntimeError(f'no Azure Kinect with serial {serial} among {count} device(s)')
 
     def _stream(self):
+        try:
+            self._stream_frames()
+        except Exception as e:  # without this the thread dies silently and the node keeps running
+            self.get_logger().fatal(f'camera stream stopped: {e}')
+            rclpy.try_shutdown()
+
+    def _stream_frames(self):
         while self._running and rclpy.ok():
             capture = self._camera.get_capture()
             if capture.color is None:
                 continue
+            try:
+                bgr = to_bgr(capture.color, self._color_format)
+            except ValueError as e:
+                self.get_logger().warn(f'skipping frame: {e}', throttle_duration_sec=5.0)
+                continue
             stamp = self.get_clock().now().to_msg()
-            image = self._bridge.cv2_to_imgmsg(to_bgr(capture.color, self._color_format), 'bgr8')
+            image = self._bridge.cv2_to_imgmsg(bgr, 'bgr8')
             image.header.stamp, image.header.frame_id = stamp, self._frame_id
             self._image_pub.publish(image)
             if self._camera_info is not None:

@@ -122,10 +122,11 @@ class RobotiqSocketGripper:
         with self._lock:
             self._socket.sendall(f'GET {variable}\n'.encode(self.ENCODING))
             data = self._socket.recv(1024)
-        name, value = data.decode(self.ENCODING).split()
-        if name != variable:
-            raise ValueError(f'unexpected gripper reply {data!r} to GET {variable}')
-        return int(value)
+        reply = data.decode(self.ENCODING, errors='replace').split()
+        if len(reply) != 2 or reply[0] != variable or not reply[1].isdigit():
+            # An OSError, so the controller pauses instead of crashing.
+            raise ConnectionError(f'unexpected gripper reply {data!r} to GET {variable}')
+        return int(reply[1])
 
 
 class ActionGripper:
