@@ -301,7 +301,7 @@ Options:
 For a first run, keep the defaults:
 
 - the controller pauses after every task (`step_mode`);
-- the arm runs at 10% speed;
+- set the pendant's speed slider to 10% before pressing **Play**: the slider is the arm speed;
 - keep a hand on the emergency stop.
 
 ### Operator control
@@ -336,7 +336,7 @@ Parameters you are most likely to change:
 
 | Node | Parameter | Default | Meaning |
 |---|---|---|---|
-| `scrubnurse_controller` | `velocity_scaling` | 0.1 | Arm speed (0–1), applied to every motion |
+| `scrubnurse_controller` | `velocity_scaling` | 1.0 | Arm speed (0–1); on the real cell leave it at 1.0 and use the pendant slider |
 | | `start_paused`, `step_mode` | true | Wait for `~/resume` at start / after every task |
 | | `motion_timeout` | 10.0 | Cancel a motion running this much longer than planned (s) |
 | | `gripper.host`, `gripper.port` | `robot_ip`, 63352 | Robotiq URCap socket |
@@ -436,8 +436,8 @@ matrix to 1.4 mm on average.
   separate database node is gone; the controller reads `/tool_detections` directly.
 - **Partial paths:** a straight-line path only runs if at least 95% of it could be planned. ROS 1
   executed partial paths.
-- **Speed:** the default arm speed is 10% (`velocity_scaling`), and it also applies to straight-line
-  moves. On Humble, MoveIt returns straight-line paths timed at full speed, so the controller
+- **Speed:** on the real cell the pendant's speed slider sets the arm speed (`velocity_scaling` is
+  1.0); in Gazebo `velocity_scaling` does (0.5). On Humble, MoveIt returns straight-line paths timed at full speed, so the controller
   retimes them to `velocity_scaling` before executing.
 - **Stale detections:** a detection is only used if it is less than 1 s old and the image was taken
   after the arm stopped moving. ROS 1 kept re-publishing the last detection forever.

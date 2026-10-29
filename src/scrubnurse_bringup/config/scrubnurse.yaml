@@ -23,7 +23,7 @@ tool_detector:
     flip_orientation_ids: [E, F]
     # Table work area in the 1920x1080 overhead image (x, y pairs).
     use_roi: true
-    roi_polygon: [563, 834, 1241, 838, 1252, 228, 562, 222]
+    roi_polygon: [875, 750, 1384, 750, 1384, 298, 875, 298]
     rate: 15.0
     publish_annotated: true
     display: false
@@ -52,8 +52,9 @@ scrubnurse_controller:
     group_name: ur_manipulator
     base_frame: base
     end_effector_link: tool0
-    velocity_scaling: 0.1
-    acceleration_scaling: 0.1
+    # Full speed here: the pendant's speed slider sets the real arm speed (10% slider = 10%).
+    velocity_scaling: 1.0
+    acceleration_scaling: 1.0
     min_cartesian_fraction: 0.95
     # An arm motion running this much longer than planned is cancelled (seconds).
     motion_timeout: 10.0

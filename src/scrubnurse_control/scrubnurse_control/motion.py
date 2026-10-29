@@ -4,7 +4,6 @@ import math
 import time
 
 from builtin_interfaces.msg import Duration
-from rclpy.duration import Duration as RosDuration
 
 UR_JOINTS = [
     'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
@@ -39,8 +38,10 @@ class Arm:
                  base_frame='base', end_effector='tool0', joint_names=UR_JOINTS,
                  velocity_scaling=0.1, acceleration_scaling=0.1,
                  min_cartesian_fraction=0.95, cartesian_max_step=0.005,
-                 motion_timeout=10.0, should_stop=lambda: False):
+                 motion_timeout=10.0, should_stop=lambda: False,
+                 speed_scaling_topic='/speed_scaling_state_broadcaster/speed_scaling'):
         from pymoveit2 import MoveIt2
+        from std_msgs.msg import Float64
 
         self._moveit2 = MoveIt2(
             node=node, joint_names=joint_names, base_link_name=base_frame,
@@ -57,6 +58,12 @@ class Arm:
         self._logger = node.get_logger()
         self._min_fraction = min_cartesian_fraction
         self._max_step = cartesian_max_step
+        # The UR pendant's speed slider (percent) slows execution; no topic (simulation) = 100.
+        self._speed_scaling = 1.0
+        node.create_subscription(
+            Float64, speed_scaling_topic,
+            lambda msg: setattr(self, '_speed_scaling', msg.data / 100.0), 1,
+            callback_group=callback_group)
 
     def move_linear(self, position, orientation):
         """Move tool0 in a straight line to the pose; return True on success."""
@@ -87,12 +94,17 @@ class Arm:
             return False
         end = trajectory.points[-1].time_from_start
         allowed = end.sec + end.nanosec * 1e-9 + self._motion_timeout
-        # ROS time, so the limit also holds when Gazebo runs slower than real time.
-        deadline = self._clock.now() + RosDuration(seconds=allowed)
+        # Trajectory time actually executed: ROS time (Gazebo may run slower than real time)
+        # weighted by the speed slider, so a slowed or paused robot does not time out.
+        progress, last = 0.0, self._clock.now()
         while self._moveit2.query_state() != MoveIt2State.IDLE:
-            timed_out = self._clock.now() > deadline
+            now = self._clock.now()
+            progress += (now - last).nanoseconds * 1e-9 * self._speed_scaling
+            last = now
+            timed_out = progress > allowed
             if timed_out:
-                self._logger.error(f'motion did not finish within {allowed:.0f} s')
+                self._logger.error(f'motion did not finish within {allowed:.0f} s of '
+                                   'trajectory time')
             if timed_out or self._should_stop():
                 self._moveit2.cancel_execution()
                 self._moveit2.wait_until_executed(timeout_sec=2.0)

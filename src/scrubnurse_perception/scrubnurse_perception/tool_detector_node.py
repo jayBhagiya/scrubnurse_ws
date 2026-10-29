@@ -23,7 +23,7 @@ from sensor_msgs.msg import Image
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 
 # Work area on the real cell's table (pixels of the 1920x1080 overhead camera).
-DEFAULT_ROI = [563, 834, 1241, 838, 1252, 228, 562, 222]
+DEFAULT_ROI = [875, 750, 1384, 750, 1384, 298, 875, 298]
 
 
 class ToolDetector(Node):
