@@ -16,7 +16,7 @@ kinect_camera:
 tool_detector:
   ros__parameters:
     device: cuda:0
-    image_size: 640
+    image_size: 1088  # the size the model was trained at
     confidence_threshold: 0.5
     # Model class index -> tool id, and the tools whose heading needs flipping.
     class_ids: [A, B, C, D, E, F]
@@ -24,6 +24,8 @@ tool_detector:
     # Table work area in the 1920x1080 overhead image (x, y pairs).
     use_roi: true
     roi_polygon: [875, 750, 1384, 750, 1384, 298, 875, 298]
+    # Tools are ~140 px long here, ~190 px in the training images: enlarge the ROI to match.
+    roi_scale: 1.35
     rate: 15.0
     publish_annotated: true
     display: false

@@ -26,15 +26,31 @@ from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithP
 DEFAULT_ROI = [875, 750, 1384, 750, 1384, 298, 875, 298]
 
 
+def zoom_roi(frame, roi, scale):
+    """
+    Enlarge the ROI's bounding box by `scale` into the top-left of a black frame-sized image.
+
+    The model was trained on whole frames at one camera height: keeping the frame size
+    makes `image_size` shrink the tools exactly as in training. Returns the image and
+    the ROI's top-left corner; a model pixel p maps back to p / scale + corner.
+    """
+    x, y, w, h = cv2.boundingRect(roi)
+    crop = cv2.resize(frame[y:y + h, x:x + w], None, fx=scale, fy=scale)
+    image = np.zeros_like(frame)
+    crop = crop[:frame.shape[0], :frame.shape[1]]
+    image[:crop.shape[0], :crop.shape[1]] = crop
+    return image, np.array([x, y], dtype=float)
+
+
 class ToolDetector(Node):
 
     def __init__(self):
         super().__init__('tool_detector')
         share = get_package_share_directory('scrubnurse_perception')
         weights = self.declare_parameter(
-            'weights', os.path.join(share, 'models', 'tool_seg_best_train3.pt')).value
+            'weights', os.path.join(share, 'models', 'tool_seg_best_train39.pt')).value
         self._device = self.declare_parameter('device', 'cuda:0').value
-        self._image_size = self.declare_parameter('image_size', 640).value
+        self._image_size = self.declare_parameter('image_size', 1088).value
         self._confidence = self.declare_parameter('confidence_threshold', 0.5).value
         self._class_ids = list(
             self.declare_parameter('class_ids', ['A', 'B', 'C', 'D', 'E', 'F']).value)
@@ -42,6 +58,8 @@ class ToolDetector(Node):
         use_roi = self.declare_parameter('use_roi', True).value
         roi = self.declare_parameter('roi_polygon', DEFAULT_ROI).value
         self._roi = np.array(roi, dtype=np.int32).reshape(-1, 2) if use_roi else None
+        # Tool size in the image relative to the training images (camera height); 1 = no zoom.
+        self._roi_scale = self.declare_parameter('roi_scale', 1.0).value
         rate = self.declare_parameter('rate', 15.0).value
         self._annotate = self.declare_parameter('publish_annotated', True).value
         self._display = self.declare_parameter('display', False).value
@@ -71,15 +89,22 @@ class ToolDetector(Node):
         if msg is None:
             return
         frame = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        image, corner, scale = frame, np.zeros(2), 1.0
+        if self._roi is not None and self._roi_scale != 1.0:
+            scale = self._roi_scale
+            image, corner = zoom_roi(frame, self._roi, scale)
         result = self._model.predict(
-            frame, imgsz=self._image_size, conf=self._confidence, device=self._device,
+            image, imgsz=self._image_size, conf=self._confidence, device=self._device,
             verbose=False)[0]
 
         out = Detection2DArray(header=msg.header)
         boxes = result.boxes
         outlines = result.masks.xy if result.masks is not None else [None] * len(boxes)
         for xyxy, cls, score, outline in zip(
-                boxes.xyxy.tolist(), boxes.cls.tolist(), boxes.conf.tolist(), outlines):
+                boxes.xyxy.cpu().numpy(), boxes.cls.tolist(), boxes.conf.tolist(), outlines):
+            xyxy = (xyxy.reshape(2, 2) / scale + corner).ravel().tolist()
+            if outline is not None:
+                outline = outline / scale + corner
             x1, y1, x2, y2 = xyxy
             center = ((x1 + x2) / 2, (y1 + y2) / 2)
             if self._roi is not None and cv2.pointPolygonTest(self._roi, center, False) < 0:
