@@ -12,6 +12,7 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>scrubnurse_control</exec_depend>
+  <exec_depend>scrubnurse_dashboard</exec_depend>
   <exec_depend>scrubnurse_perception</exec_depend>
   <exec_depend>scrubnurse_sim</exec_depend>
   <exec_depend>scrubnurse_voice</exec_depend>

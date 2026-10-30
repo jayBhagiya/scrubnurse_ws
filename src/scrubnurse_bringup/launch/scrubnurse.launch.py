@@ -1,5 +1,5 @@
 """
-Scrubnurse application nodes: tool perception, voice commands and the task controller.
+Scrubnurse application nodes: tool perception, voice commands, the task controller and the dashboard.
 
 Expects the robot side (UR driver or simulation, plus MoveIt 2) and a camera
 image topic to be up; real.launch.py, mock.launch.py and sim.launch.py include this file.
@@ -32,6 +32,11 @@ ARGUMENTS = [
     ('localizer', 'true', 'Start the tool localizer (pixels to robot coordinates)'),
     ('voice', 'true', 'Start the voice command node'),
     ('voice_gui', 'true', 'Show the voice recording window'),
+    ('dashboard', 'true', 'Start the web dashboard'),
+    ('dashboard_mode', 'real', 'Shown on the dashboard: real, sim or mock'),
+    ('dashboard_host', '127.0.0.1',
+     'Dashboard address; 0.0.0.0 makes it reachable from the network (no login)'),
+    ('dashboard_port', '8080', 'Dashboard port'),
 ]
 
 
@@ -50,6 +55,14 @@ def generate_launch_description():
         Node(package='scrubnurse_voice', executable='voice_command', output='screen',
              parameters=[*params, {'use_gui': arg('voice_gui')}],
              condition=IfCondition(arg('voice'))),
+        Node(package='scrubnurse_dashboard', executable='dashboard', output='screen',
+             parameters=[*params, {
+                 'mode': arg('dashboard_mode'),
+                 'host': arg('dashboard_host'),
+                 'port': ParameterValue(arg('dashboard_port'), value_type=int),
+             }],
+             remappings=[('image', arg('image_topic'))],
+             condition=IfCondition(arg('dashboard'))),
         Node(package='scrubnurse_control', executable='scrubnurse_controller', output='screen',
              parameters=[*params, {
                  'poses_file': ParameterValue(arg('poses_file'), value_type=str),

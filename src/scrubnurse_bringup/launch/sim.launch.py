@@ -107,5 +107,7 @@ def generate_launch_description():
                 'gripper_backend': 'action',
                 'home_pose': 'HD',
                 'voice': arg('voice'),
+                'image_topic': '/overhead_camera/image',
+                'dashboard_mode': 'sim',
             }.items()),
     ])

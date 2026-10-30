@@ -45,5 +45,6 @@ def generate_launch_description():
                                      'voice': 'false',
                                      'gripper_backend': 'mock',
                                      'home_pose': 'HD',
+                                     'dashboard_mode': 'mock',
                                  }.items()),
     ])
