@@ -34,10 +34,10 @@ tool_localizer:
   ros__parameters:
     # Cell coordinates (poses.yaml, homography) are in the UR `base` frame, not base_link.
     frame_id: base
-    # Pixel -> base homography calibrated on 2024-11-22
-    # (ROS 1: od_homography/config/tf-scrubnurse-22-11-2024.json).
+    # Pixel -> base homography calibrated on 2026-10-29 with tool D, 12 pairs, mean error 6 mm
+    # (pairs in scrubnurse_perception/test/data/calibration_pairs_2026-10-29.csv).
     # Recompute with: ros2 run scrubnurse_perception compute_homography pairs.csv
-    homography: [1.0163595831671571e-05, -0.0006197696797893486, 0.3398135029914868, -0.0006014182940706726, 4.1451986390270245e-05, -0.4024938848671156, -1.577423913888336e-05, -5.1868361319957846e-05, 1.0]
+    homography: [2.107374008703312e-05, -0.0009835987872172961, 0.5204127672229939, -0.0010712933526266216, -6.0781671571262156e-05, 0.1568357679535437, 7.906395267137633e-05, 3.927996498273985e-05, 1.0]
 
 voice_command:
   ros__parameters:
