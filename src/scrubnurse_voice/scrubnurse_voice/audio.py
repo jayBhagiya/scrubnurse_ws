@@ -1,10 +1,13 @@
 """Microphone recording and audio file loading at Whisper's sample rate."""
 
+from collections import deque
 from math import gcd
+import queue
 
 import numpy as np
 
 WHISPER_RATE = 16000
+BLOCK_SECONDS = 0.03
 
 
 def to_whisper_input(samples, rate):
@@ -36,3 +39,49 @@ def record(seconds, device=None):
                               channels=1, dtype='float32', device=device)
     sounddevice.wait()
     return samples[:, 0]
+
+
+def split_phrases(blocks, level, end_silence_blocks, max_blocks, pre_roll_blocks=10):
+    """
+    Group audio blocks into phrases and yield each as one array.
+
+    A phrase starts at the first block whose RMS exceeds `level` (with a few
+    quiet blocks before it, so the first syllable is not cut) and ends after
+    `end_silence_blocks` quiet blocks or at `max_blocks`.
+    """
+    before = deque(maxlen=pre_roll_blocks)
+    phrase, quiet = [], 0
+    for block in blocks:
+        loud = np.sqrt(np.mean(np.square(block))) > level
+        if not phrase:
+            if loud:
+                phrase, quiet = [*before, block], 0
+            else:
+                before.append(block)
+            continue
+        phrase.append(block)
+        quiet = 0 if loud else quiet + 1
+        if quiet >= end_silence_blocks or len(phrase) >= max_blocks:
+            yield np.concatenate(phrase)
+            phrase = []
+            before.clear()
+
+
+def phrases(running, level, end_silence=0.8, max_seconds=8.0, device=None):
+    """Yield each spoken phrase from the microphone as Whisper input while `running()`."""
+    import sounddevice
+
+    blocks = queue.Queue()
+
+    def mic_blocks():
+        while running():
+            try:
+                yield blocks.get(timeout=0.5)
+            except queue.Empty:
+                pass
+
+    with sounddevice.InputStream(samplerate=WHISPER_RATE, channels=1, dtype='float32',
+                                 blocksize=int(BLOCK_SECONDS * WHISPER_RATE), device=device,
+                                 callback=lambda data, *_: blocks.put(data[:, 0].copy())):
+        yield from split_phrases(mic_blocks(), level, round(end_silence / BLOCK_SECONDS),
+                                 round(max_seconds / BLOCK_SECONDS))

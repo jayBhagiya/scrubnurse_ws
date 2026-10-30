@@ -2,9 +2,13 @@
 Voice commands for the Scrubnurse: speech to tool id with Whisper.
 
 Publishes the recognised tool id (e.g. "D") on `tool_request` (std_msgs/String)
-and every transcript on `~/transcript`. A recording is started by the GUI
-button (use_gui:=true, like the ROS 1 version), by calling the `~/listen`
-service (std_srvs/Trigger), or once at startup from `audio_file` for testing
+and every transcript on `~/transcript`.
+
+With `live` the microphone is always on: each phrase (speech up to a pause) is
+transcribed, and a tool is requested only if the phrase also contains a wake
+word ("robot, scalpel"). Otherwise a fixed-length recording is started by the
+GUI button (use_gui:=true, like the ROS 1 version) or the `~/listen` service
+(std_srvs/Trigger). `audio_file` transcribes one file at startup, for testing
 without a microphone.
 """
 
@@ -15,7 +19,8 @@ import rclpy
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
 from scrubnurse_voice import audio
-from scrubnurse_voice.tool_catalog import DEFAULT_TOOL_IDS, DEFAULT_TOOL_NAMES, ToolCatalog
+from scrubnurse_voice.tool_catalog import DEFAULT_TOOL_IDS, DEFAULT_TOOL_NAMES
+from scrubnurse_voice.tool_catalog import has_wake_word, ToolCatalog
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
@@ -30,6 +35,12 @@ class VoiceCommandNode(Node):
         input_device = self.declare_parameter('input_device', '').value
         self._input_device = input_device or None
         self.use_gui = self.declare_parameter('use_gui', True).value
+        self.live = self.declare_parameter('live', False).value
+        self.wake_words = self.declare_parameter(
+            'wake_words', ['robot', 'scrub nurse', 'scrubnurse']).value
+        self._wake_threshold = self.declare_parameter('wake_threshold', 0.65).value
+        self._speech_level = self.declare_parameter('speech_level', 0.01).value
+        self._end_silence = self.declare_parameter('end_silence', 0.8).value
         audio_file = self.declare_parameter('audio_file', '').value
         self._catalog = ToolCatalog(
             self.declare_parameter('tool_ids', DEFAULT_TOOL_IDS).value,
@@ -46,10 +57,14 @@ class VoiceCommandNode(Node):
         self.get_logger().info(f'Loading Whisper "{model_name}" on {device}...')
         self._model = whisper.load_model(model_name, device=device)
         self._busy = threading.Lock()
+        self.results = queue.Queue()  # (text, tool_id or None) for the GUI
 
         self._request_pub = self.create_publisher(String, 'tool_request', 10)
         self._transcript_pub = self.create_publisher(String, '~/transcript', 10)
-        self.create_service(Trigger, '~/listen', self._on_listen)
+        if self.live:
+            threading.Thread(target=self._listen_live, daemon=True).start()
+        else:
+            self.create_service(Trigger, '~/listen', self._on_listen)
         if audio_file:
             self._file_timer = self.create_timer(0.5, lambda: self._from_file(audio_file))
         self.get_logger().info('Ready')
@@ -59,18 +74,34 @@ class VoiceCommandNode(Node):
         self.get_logger().info(f'Recording {self.record_seconds:.0f} s...')
         return self.process(audio.record(self.record_seconds, self._input_device))
 
-    def process(self, samples):
+    def process(self, samples, need_wake_word=False):
         """Transcribe 16 kHz audio and publish the result; return (text, tool_id)."""
         with self._busy:
             text = self._model.transcribe(samples, language='en', fp16=self._fp16)['text']
-        tool_id = self._catalog.match(text)
         self._transcript_pub.publish(String(data=text))
+        if need_wake_word and not has_wake_word(text, self.wake_words, self._wake_threshold):
+            self.get_logger().info(f'"{text.strip()}": no wake word, ignored')
+            return text, None
+        tool_id = self._catalog.match(text)
+        if self.use_gui:
+            self.results.put((text, tool_id))
         if tool_id is None:
             self.get_logger().warn(f'"{text.strip()}": no tool matched')
         else:
             self.get_logger().info(f'"{text.strip()}" -> tool {tool_id}')
             self._request_pub.publish(String(data=tool_id))
         return text, tool_id
+
+    def _listen_live(self):
+        self.get_logger().info(f'Listening; say e.g. "{self.wake_words[0]}, scalpel"')
+        try:
+            for samples in audio.phrases(rclpy.ok, self._speech_level, self._end_silence,
+                                         device=self._input_device):
+                self.process(samples, need_wake_word=True)
+        except Exception as e:  # e.g. the microphone was unplugged
+            if rclpy.ok():
+                self.get_logger().error(f'live listening stopped: {e}')
+                self.results.put((f'Error: {e}', None))
 
     def _from_file(self, path):
         self._file_timer.cancel()
@@ -90,12 +121,14 @@ class RecorderWindow:
         import tkinter as tk
 
         self._node = node
-        self._results = queue.Queue()
         self.root = tk.Tk()
         self.root.title('Scrubnurse voice command')
         self.root.geometry('500x300')
+        self.root.report_callback_exception = self._on_callback_error
         self._button = tk.Button(self.root, text='Start Recording', command=self._start,
                                  bg='green', fg='white', width=20, height=3)
+        if node.live:
+            self._button.config(text=f'Listening for "{node.wake_words[0]}"', state='disabled')
         self._button.place(relx=0.5, rely=0.4, anchor=tk.CENTER)
         self._label = tk.Label(self.root, text='', font=('Helvetica', 16), wraplength=460)
         self._label.place(relx=0.5, rely=0.8, anchor=tk.CENTER)
@@ -104,6 +137,13 @@ class RecorderWindow:
     def run(self):
         self.root.mainloop()
 
+    def _on_callback_error(self, exc, value, traceback):
+        # Tk swallows a Ctrl-C raised inside a callback; close the window instead.
+        if issubclass(exc, KeyboardInterrupt):
+            self.root.destroy()
+        else:
+            type(self.root).report_callback_exception(self.root, exc, value, traceback)
+
     def _start(self):
         self._button.config(text='Recording', state='disabled', bg='red')
         threading.Thread(target=self._listen, daemon=True).start()
@@ -111,12 +151,10 @@ class RecorderWindow:
 
     def _listen(self):
         try:
-            text, tool_id = self._node.listen()
-            result = f'{text.strip()}  ->  {tool_id or "no tool matched"}'
+            self._node.listen()
         except Exception as e:  # microphone or Whisper failure; the button must come back
             self._node.get_logger().error(f'recording failed: {e}')
-            result = f'Error: {e}'
-        self._results.put(result)
+            self._node.results.put((f'Error: {e}', None))
 
     def _countdown(self, remaining):
         if str(self._button['state']) != 'disabled':
@@ -132,12 +170,20 @@ class RecorderWindow:
             self.root.destroy()
             return
         try:
-            result = self._results.get_nowait()
-            self._button.config(text='Start Recording', state='normal', bg='green')
-            self._label.config(text=result)
+            text, tool_id = self._node.results.get_nowait()
+            if not self._node.live:
+                self._button.config(text='Start Recording', state='normal', bg='green')
+            self._label.config(text=f'{text.strip()}  ->  {tool_id or "no tool matched"}')
         except queue.Empty:
             pass
         self.root.after(100, self._poll)
+
+
+def spin_until_shutdown(executor):
+    try:
+        executor.spin()
+    except ExternalShutdownException:  # Ctrl-C: rclpy shut down under the GUI thread
+        pass
 
 
 def main(args=None):
@@ -147,7 +193,7 @@ def main(args=None):
     executor.add_node(node)
     try:
         if node.use_gui:
-            threading.Thread(target=executor.spin, daemon=True).start()
+            threading.Thread(target=spin_until_shutdown, args=(executor,), daemon=True).start()
             RecorderWindow(node).run()
         else:
             executor.spin()

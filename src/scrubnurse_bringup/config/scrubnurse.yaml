@@ -44,6 +44,14 @@ voice_command:
     model: medium.en
     device: cuda
     record_seconds: 5.0
+    input_device: Jabra  # name substring: the ALSA card number changes between boots
+    # Always listening; a tool is requested only with a wake word ("robot, scalpel").
+    # Whisper often mishears "scrub nurse", hence the fuzzy wake_threshold.
+    live: true
+    wake_words: [robot, scrub nurse, scrubnurse]
+    wake_threshold: 0.65
+    speech_level: 0.01  # RMS that starts a phrase (Jabra: silence ~0.0001)
+    end_silence: 0.8  # s of quiet that ends a phrase
     tool_ids: [A, B, C, D, E, F]
     tool_names: [pointed scissors, needle holder, mosquito, scalpel, anatomical forceps, surgical forceps]
     similarity_threshold: 0.75

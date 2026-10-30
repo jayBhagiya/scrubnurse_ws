@@ -47,8 +47,9 @@ camera ─► tool_detector ──(/tool_detections_2d)─► tool_localizer ─
                                      scrubnurse_controller ─► MoveIt 2 ─► UR10e + Robotiq gripper
 ```
 
-1. **Voice:** `voice_command` records a few seconds of audio, transcribes it with Whisper and
-   maps the spoken name to a tool id.
+1. **Voice:** `voice_command` listens all the time, transcribes each phrase with Whisper and
+   maps a spoken tool name to a tool id. A phrase counts only if it also contains a wake word
+   ("robot, scalpel"). With `live: false` it records a few seconds per button press instead.
 2. **Detection:** `tool_detector` segments the instruments in the overhead camera image with YOLO
    and estimates each one's heading from its mask.
 3. **Localization:** `tool_localizer` converts pixels to robot coordinates on the table with a
@@ -73,7 +74,7 @@ Tool ids:
 | Package | Contents |
 |---|---|
 | `scrubnurse_perception` | `kinect_camera` (Azure Kinect driver), `tool_detector` (YOLO segmentation → pixel position + heading), `tool_localizer` (homography → grasp pose), `collect_calibration` and `compute_homography` (camera calibration) |
-| `scrubnurse_voice` | `voice_command` (Whisper speech → tool id, with a record-button window) |
+| `scrubnurse_voice` | `voice_command` (Whisper speech → tool id; always listening for a wake word, or a record-button window) |
 | `scrubnurse_control` | `scrubnurse_controller` (task logic, MoveIt 2 motions, Robotiq gripper), `record_pose` (teach new poses) |
 | `scrubnurse_bringup` | Launch files and cell configuration: `scrubnurse.yaml`, `poses.yaml`, `sim.yaml`, UR10e and camera calibration |
 | `scrubnurse_sim` | Gazebo cell, plus the `sim_gripper`, `sim_tool_detector` and `sim_surgeon` helpers |

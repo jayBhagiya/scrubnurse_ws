@@ -13,6 +13,18 @@ def normalize(text):
     return ' '.join(re.sub(r'[^a-zA-Z0-9\s]', '', text).lower().split())
 
 
+def similarity(spoken, phrase):
+    """
+    Return how well (0..1) `phrase` matches the closest same-length word run in `spoken`.
+
+    Both must be normalized. Comparing word windows instead of the whole
+    transcript keeps filler words ("let me the analytic forceps") from diluting it.
+    """
+    words, k = spoken.split(), len(phrase.split())
+    return max(SequenceMatcher(None, ' '.join(words[i:i + k]), phrase).ratio()
+               for i in range(max(1, len(words) - k + 1)))
+
+
 class ToolCatalog:
     """Spoken names of the tools the robot can hand over, keyed by tool id."""
 
@@ -40,8 +52,11 @@ class ToolCatalog:
         if contained:
             return self._ids_by_name[max(contained, key=len)]
 
-        def similarity(name):
-            return SequenceMatcher(None, spoken, name).ratio()
+        best = max(self._ids_by_name, key=lambda name: similarity(spoken, name))
+        return self._ids_by_name[best] if similarity(spoken, best) > self._threshold else None
 
-        best = max(self._ids_by_name, key=similarity)
-        return self._ids_by_name[best] if similarity(best) > self._threshold else None
+
+def has_wake_word(text, wake_words, threshold):
+    """Check for any wake word in `text`, fuzzily: Whisper hears "scrub nurse" as "scrub nerds"."""
+    spoken = normalize(text)
+    return bool(spoken) and any(similarity(spoken, normalize(w)) > threshold for w in wake_words)
