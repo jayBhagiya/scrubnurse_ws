@@ -16,7 +16,8 @@ A pause takes effect between tasks. State is published on `~/status`.
 
 If `home_pose` names a pose with recorded joints, the arm first makes a
 joint-space move there, so straight-line moves start from a known
-configuration (used in simulation; the ROS 1 setup relied on the operator).
+configuration. The cell uses HD, the rest pose where every task starts and ends
+(the ROS 1 setup relied on the operator).
 """
 
 from collections import deque

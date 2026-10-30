@@ -7,9 +7,10 @@ TOOLS = 'ABCDEF'
 NAMES = (['H', 'H1', 'HD', 'HW', 'PP', 'P']
          + [f'{prefix}{t}' for t in TOOLS for prefix in ('', 'P', 'R', 'RP', 'RW')])
 # One distinct position per pose name, so recorded moves can be mapped back to names.
-POSES = {name: NamedPose((float(i), 0.0, 0.5), (1.0, 0.0, 0.0, 0.0))
+POSES = {name: NamedPose((float(i), 0.0, 0.5), (1.0, 0.0, 0.0, 0.0), joints=(float(i),) * 6)
          for i, name in enumerate(NAMES)}
 NAME_AT = {pose.position: name for name, pose in POSES.items()}
+NAME_AT_JOINTS = {pose.joints: name for name, pose in POSES.items()}
 TOOL = DetectedTool('C', (0.02, -0.9, 0.0), (0.0, 1.0, 0.0, 0.0))
 
 
@@ -23,6 +24,10 @@ class Recorder:
     def move_linear(self, position, orientation):
         position = tuple(position)
         self.calls.append(('move', NAME_AT.get(position, position), tuple(orientation)))
+        return len(self.calls) != self.fail_at
+
+    def move_joints(self, joints):
+        self.calls.append(('joints', NAME_AT_JOINTS.get(tuple(joints), joints)))
         return len(self.calls) != self.fail_at
 
     def move(self, position, speed, force):
@@ -64,12 +69,16 @@ def ros1_place_after_detection(t, tool):
 
 
 @pytest.mark.parametrize('tool', TOOLS)
-def test_handover_matches_ros1(tool):
-    assert run(HANDOVER, tool) == ros1_full_pick_and_place(tool)
+def test_handover_is_ros1_from_hd_with_joint_moves_to_h_and_pp(tool):
+    expected = ros1_full_pick_and_place(tool)
+    expected[expected.index(('move', 'PP', (1.0, 0.0, 0.0, 0.0)))] = ('joints', 'PP')
+    start = [('move', 'HD', (1.0, 0.0, 0.0, 0.0)), ('joints', 'H')]
+    assert run(HANDOVER, tool) == start + expected
 
 
-def test_return_matches_ros1():
-    assert run(RETURN, TOOL.tool_id, TOOL) == ros1_place_after_detection('C', TOOL)
+def test_return_is_ros1_starting_at_hd():
+    hd = ('move', 'HD', (1.0, 0.0, 0.0, 0.0))
+    assert run(RETURN, TOOL.tool_id, TOOL) == [hd] + ros1_place_after_detection('C', TOOL)
 
 
 def test_failed_step_stops_sequence():

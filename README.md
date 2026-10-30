@@ -435,13 +435,17 @@ matrix to 1.4 mm on average.
 - **Messages:** JSON-in-`std_msgs/String` topics were replaced by `vision_msgs` detections. The
   separate database node is gone; the controller reads `/tool_detections` directly.
 - **Partial paths:** a straight-line path only runs if at least 95% of it could be planned. ROS 1
-  executed partial paths.
+  executed partial paths. ROS 1 relied on that for the magazine → PP move, which crosses the wrist
+  singularity, so the handover now reaches H and PP with joint moves.
 - **Speed:** on the real cell the pendant's speed slider sets the arm speed (`velocity_scaling` is
   1.0); in Gazebo `velocity_scaling` does (0.5). On Humble, MoveIt returns straight-line paths timed at full speed, so the controller
   retimes them to `velocity_scaling` before executing.
 - **Stale detections:** a detection is only used if it is less than 1 s old and the image was taken
   after the arm stopped moving. ROS 1 kept re-publishing the last detection forever.
 - **Return area:** a tool outside the return area no longer blocks the tools that are inside it.
+- **Rest pose:** the arm moves to HD at startup (`home_pose`) and every task starts and ends
+  there. A handover goes HD → H → magazine; a return goes HD → above the tool. ROS 1 started
+  each task from wherever the arm was.
 - **Timeouts:** gripper waits and arm motions time out (`motion_timeout`) instead of hanging. The
   UR MoveIt configuration disables MoveIt's own execution monitoring.
 - **Stopping:** Ctrl-C (or SIGTERM from `ros2 launch`) cancels the running trajectory, so the arm

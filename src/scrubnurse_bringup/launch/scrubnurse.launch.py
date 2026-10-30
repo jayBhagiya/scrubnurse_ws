@@ -26,7 +26,7 @@ ARGUMENTS = [
     ('image_topic', '/od_camera/stream/rgb', 'Camera image topic for the tool detector'),
     ('gripper_backend', 'robotiq_socket', 'Gripper backend: robotiq_socket, action or mock'),
     ('robot_ip', '', 'UR controller address, where the Robotiq URCap socket listens'),
-    ('home_pose', '', 'Joint-space move to this pose before the first task (empty: off)'),
+    ('home_pose', 'HD', 'Rest pose: joint move here before the first task (empty: off)'),
     ('use_sim_time', 'false', 'Use the /clock topic (simulation)'),
     ('detector', 'true', 'Start the YOLO tool detector'),
     ('localizer', 'true', 'Start the tool localizer (pixels to robot coordinates)'),

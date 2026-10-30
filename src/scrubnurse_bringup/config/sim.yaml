@@ -10,7 +10,7 @@ tool_localizer:
 scrubnurse_controller:
   ros__parameters:
     step_mode: false
-    home_pose: H
+    home_pose: HD
     # Gazebo has no speed slider, so slow the arm here instead.
     velocity_scaling: 0.5
     acceleration_scaling: 0.5

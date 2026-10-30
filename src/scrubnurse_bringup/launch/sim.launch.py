@@ -105,7 +105,7 @@ def generate_launch_description():
                 'use_sim_time': 'true',
                 'detector': 'false',
                 'gripper_backend': 'action',
-                'home_pose': 'H',
+                'home_pose': 'HD',
                 'voice': arg('voice'),
             }.items()),
     ])

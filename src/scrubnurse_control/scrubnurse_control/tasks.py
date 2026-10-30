@@ -48,15 +48,20 @@ class Wait:
     seconds: float
 
 
-# Magazine -> handover position (ROS 1 `full_pick_and_place_operation`).
+# Every task starts and ends at the rest pose HD (ROS 1 tasks started wherever the arm was).
+
+# Magazine -> handover position (ROS 1 `full_pick_and_place_operation`), via H.
+# H and PP are joint moves: a straight line from HD reaches H in another arm configuration,
+# and the line P{tool} -> PP crosses the wrist singularity (ROS 1 ran 90% of it).
 HANDOVER = (
+    MoveTo('HD'), MoveToJoints('H'),
     Grip(153), MoveTo('P{tool}'), MoveTo('{tool}'), Grip(255), MoveTo('P{tool}'),
-    MoveTo('PP'), MoveTo('P'), Wait(2.0), Grip(153), MoveTo('PP'), MoveTo('HD'), Grip(255),
+    MoveToJoints('PP'), MoveTo('P'), Wait(2.0), Grip(153), MoveTo('PP'), MoveTo('HD'), Grip(255),
 )
 
 # Return area on the table -> magazine (ROS 1 `place_after_detection`).
 RETURN = (
-    Grip(127, force=0), AboveTool(), AtTool(), Grip(230, force=0), AboveTool(),
+    MoveTo('HD'), Grip(127, force=0), AboveTool(), AtTool(), Grip(230, force=0), AboveTool(),
     MoveTo('HD'), MoveTo('RW{tool}'), MoveTo('RP{tool}'), MoveTo('R{tool}'), Grip(153, force=0),
     MoveTo('RP{tool}'), MoveTo('RW{tool}'), MoveTo('HD'), Grip(230, force=0),
 )

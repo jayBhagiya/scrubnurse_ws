@@ -44,6 +44,6 @@ def generate_launch_description():
                                      'localizer': 'false',
                                      'voice': 'false',
                                      'gripper_backend': 'mock',
-                                     'home_pose': 'H',
+                                     'home_pose': 'HD',
                                  }.items()),
     ])

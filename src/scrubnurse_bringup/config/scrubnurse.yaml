@@ -62,7 +62,8 @@ scrubnurse_controller:
     motion_timeout: 10.0
     start_paused: true
     step_mode: true
-    home_pose: ""
+    # Rest pose: every task starts and ends here.
+    home_pose: HD
     detection_timeout: 1.0
     settle_time: 0.5
     # Table area the camera watches; tools put down here are returned to the magazine.
