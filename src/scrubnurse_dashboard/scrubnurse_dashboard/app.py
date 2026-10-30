@@ -95,5 +95,7 @@ def create_app(node, web_dir=None):
         return StreamingResponse(frames(), media_type='multipart/x-mixed-replace; boundary=frame')
 
     if web_dir and os.path.isdir(web_dir):
-        app.mount('/', StaticFiles(directory=web_dir, html=True), name='web')
+        # follow_symlink: colcon --symlink-install links the files to web/dist
+        app.mount('/', StaticFiles(directory=web_dir, html=True, follow_symlink=True),
+                  name='web')
     return app
