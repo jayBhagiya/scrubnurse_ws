@@ -108,6 +108,10 @@ class Arm:
             if timed_out or self._should_stop():
                 self._moveit2.cancel_execution()
                 self._moveit2.wait_until_executed(timeout_sec=2.0)
+                if self._moveit2.query_state() != MoveIt2State.IDLE:
+                    # The controller has stopped the arm, but move_group may never report the
+                    # cancelled goal; without a reset every later motion is refused.
+                    self._moveit2.force_reset_executing_state()
                 return False
             time.sleep(0.05)
         # The motion has finished; this returns its recorded outcome.

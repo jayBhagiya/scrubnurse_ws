@@ -25,7 +25,7 @@ def test_slow_down_stretches_time_and_scales_velocity_and_acceleration():
 class FakeMoveIt2:
 
     def __init__(self, busy_polls):
-        self.busy_polls, self.cancelled = busy_polls, False
+        self.busy_polls, self.cancelled, self.reset = busy_polls, False, False
 
     def execute(self, trajectory):
         return True
@@ -40,6 +40,9 @@ class FakeMoveIt2:
 
     def wait_until_executed(self, timeout_sec=None):
         return not self.cancelled
+
+    def force_reset_executing_state(self):
+        self.reset = True
 
 
 class SecondPerCallClock:
@@ -77,3 +80,18 @@ def test_stuck_robot_at_full_speed_times_out():
     arm = arm_with(1.0, busy_polls=10)
     assert not Arm._execute(arm, one_second_trajectory())
     assert arm._moveit2.cancelled
+
+
+def test_stop_resets_a_goal_move_group_never_finishes():
+    # Abort: the motion is cancelled, but the fake stays EXECUTING like move_group does.
+    arm = arm_with(1.0, busy_polls=100)
+    arm._should_stop = lambda: True
+    assert not Arm._execute(arm, one_second_trajectory())
+    assert arm._moveit2.cancelled and arm._moveit2.reset
+
+
+def test_stop_after_finished_cancel_needs_no_reset():
+    arm = arm_with(1.0, busy_polls=1)
+    arm._should_stop = lambda: True
+    assert not Arm._execute(arm, one_second_trajectory())
+    assert arm._moveit2.cancelled and not arm._moveit2.reset

@@ -48,22 +48,33 @@ class Wait:
     seconds: float
 
 
+@dataclass(frozen=True)
+class Phase:
+    """Marks where a sequence enters a phase (CycleStatus.msg); not a motion step."""
+
+    name: str
+
+
 # Every task starts and ends at the rest pose HD (ROS 1 tasks started wherever the arm was).
 
 # Magazine -> handover position (ROS 1 `full_pick_and_place_operation`), via H.
 # H and PP are joint moves: a straight line from HD reaches H in another arm configuration,
 # and the line P{tool} -> PP crosses the wrist singularity (ROS 1 ran 90% of it).
 HANDOVER = (
-    MoveTo('HD'), MoveToJoints('H'),
+    Phase('picking'), MoveTo('HD'), MoveToJoints('H'),
     Grip(153), MoveTo('P{tool}'), MoveTo('{tool}'), Grip(255), MoveTo('P{tool}'),
-    MoveToJoints('PP'), MoveTo('P'), Wait(2.0), Grip(153), MoveTo('PP'), MoveTo('HD'), Grip(255),
+    Phase('handing_over'), MoveToJoints('PP'), MoveTo('P'), Wait(2.0), Grip(153), MoveTo('PP'),
+    Phase('returning_home'), MoveTo('HD'), Grip(255),
 )
 
 # Return area on the table -> magazine (ROS 1 `place_after_detection`).
 RETURN = (
+    Phase('picking'),
     MoveTo('HD'), Grip(127, force=0), AboveTool(), AtTool(), Grip(230, force=0), AboveTool(),
+    Phase('placing'),
     MoveTo('HD'), MoveTo('RW{tool}'), MoveTo('RP{tool}'), MoveTo('R{tool}'), Grip(153, force=0),
-    MoveTo('RP{tool}'), MoveTo('RW{tool}'), MoveTo('HD'), Grip(230, force=0),
+    MoveTo('RP{tool}'), MoveTo('RW{tool}'),
+    Phase('returning_home'), MoveTo('HD'), Grip(230, force=0),
 )
 
 
@@ -96,11 +107,12 @@ class TaskRunner:
     `arm.move_linear(position, orientation)`, `arm.move_joints(joints)` and
     `gripper.move(position, speed, force)` must block until done and return
     True on success. `poses` maps names to NamedPose; `workcell` gives the
-    heights for detected-tool steps.
+    heights for detected-tool steps. `on_step(phase, step, step_count)` is
+    called before each step.
     """
 
     def __init__(self, arm, gripper, poses, workcell, log=print, sleep=time.sleep,
-                 should_stop=lambda: False):
+                 should_stop=lambda: False, on_step=lambda phase, step, count: None):
         self._arm = arm
         self._gripper = gripper
         self._poses = poses
@@ -108,6 +120,7 @@ class TaskRunner:
         self._log = log
         self._sleep = sleep
         self._should_stop = should_stop
+        self._on_step = on_step
 
     def check(self, steps, tool, detected=None):
         """Raise TaskError if the sequence cannot run (missing poses or detection)."""
@@ -124,10 +137,17 @@ class TaskRunner:
     def run(self, steps, tool, detected=None):
         """Run all steps in order; raise TaskError at the first failing step."""
         self.check(steps, tool, detected)
-        for i, step in enumerate(steps, 1):
+        count = sum(not isinstance(s, Phase) for s in steps)
+        phase, i = '', 0
+        for step in steps:
+            if isinstance(step, Phase):
+                phase = step.name
+                continue
+            i += 1
             if self._should_stop():
                 raise TaskError(f'stopped before step {i}')
-            self._log(f'[{tool}] step {i}/{len(steps)}: {describe(step, tool)}')
+            self._on_step(phase, i, count)
+            self._log(f'[{tool}] step {i}/{count}: {describe(step, tool)}')
             if not self._execute(step, tool, detected):
                 raise TaskError(f'step {i} ({describe(step, tool)}) failed')
 
