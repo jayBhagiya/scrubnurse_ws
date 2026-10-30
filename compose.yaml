@@ -1,0 +1,38 @@
+# Simulated cell (Gazebo, headless) and the dashboard on http://localhost:8080
+#   docker compose up --build
+# Dashboard only, for the real UR10e (the robot stack runs on the host):
+#   COMPOSE_FILE=compose.real.yaml docker compose up --build
+
+x-ros: &ros
+  image: scrubnurse:latest
+  environment:
+    # Not 0: the host joins this network, so a robot stack on the host's domain would see the sim.
+    ROS_DOMAIN_ID: ${SIM_ROS_DOMAIN_ID:-42}
+
+services:
+  sim:
+    <<: *ros
+    build: {context: ., dockerfile: docker/Dockerfile}
+    # Gazebo renders the overhead camera without a display through a virtual X server.
+    # exec: Ctrl-C / docker stop reaches ros2 launch, which shuts the nodes down.
+    command:
+      - bash
+      - -c
+      - >-
+        Xvfb :99 -screen 0 1280x720x24 -nolisten tcp & export DISPLAY=:99 &&
+        exec ros2 launch scrubnurse_bringup sim.launch.py
+        gazebo_gui:=false launch_rviz:=false camera:=true dashboard:=false
+    ipc: shareable  # the dashboard shares it: Fast DDS uses shared memory between the two
+    init: true
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+
+  dashboard:
+    <<: *ros
+    command: >
+      /ws/install/scrubnurse_dashboard/lib/scrubnurse_dashboard/dashboard --ros-args
+      -p host:=0.0.0.0 -p mode:=sim -r image:=/overhead_camera/image
+    ipc: service:sim
+    ports: ["127.0.0.1:${DASHBOARD_PORT:-8080}:8080"]
+    depends_on: [sim]
+    stop_signal: SIGINT

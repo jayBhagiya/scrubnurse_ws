@@ -1,0 +1,23 @@
+# Dashboard for the real UR10e: joins the host's ROS 2 network, where real.launch.py runs
+# (start that with dashboard:=false). http://localhost:8080 on the robot PC.
+#   COMPOSE_FILE=compose.real.yaml HOST_UID=$(id -u) docker compose up --build
+# DASHBOARD_HOST=0.0.0.0 makes it reachable from other PCs; there is no login.
+
+services:
+  dashboard:
+    image: scrubnurse:latest
+    build: {context: ., dockerfile: docker/Dockerfile}
+    command: >
+      /ws/install/scrubnurse_dashboard/lib/scrubnurse_dashboard/dashboard --ros-args
+      -p host:=${DASHBOARD_HOST:-127.0.0.1} -p port:=${DASHBOARD_PORT:-8080} -p mode:=real
+      -r image:=/od_camera/stream/rgb
+    network_mode: host
+    # Fast DDS talks to nodes on the same machine through shared memory, which only works
+    # with the same /dev/shm and the same user as the robot stack.
+    ipc: host
+    user: "${HOST_UID:?set HOST_UID=$(id -u), the user running the robot stack}:${HOST_UID}"
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+      ROS_HOME: /tmp/ros
+    stop_signal: SIGINT

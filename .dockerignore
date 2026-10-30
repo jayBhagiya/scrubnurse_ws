@@ -1,0 +1,9 @@
+# Only src/, requirements.txt and docker/ go into the image.
+*
+!src
+!requirements.txt
+!docker
+**/__pycache__
+**/.pytest_cache
+src/scrubnurse_dashboard/web/node_modules
+src/scrubnurse_dashboard/web/dist
