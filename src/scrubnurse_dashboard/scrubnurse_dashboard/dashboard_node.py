@@ -7,6 +7,9 @@ node's events. Serves (FastAPI, see app.py) the state as JSON and over a
 WebSocket, the camera with the detections drawn in as MJPEG, and pause, resume,
 abort, recover and tool requests, which call the controller's services or
 publish on `tool_request`.
+
+The page is built separately and installed with the package if present:
+`cd web && npm ci && npm run build`, then colcon build.
 """
 
 import collections
@@ -53,6 +56,8 @@ class DashboardNode(Node):
         self._lock = threading.Lock()
         self._cycle = None
         self._joints = None
+        self._joints_before = 0.0, []  # (time, positions) to tell whether the arm moves
+        self._moving = False
         self._detections = []
         self._positions = {}    # tool id -> [x, y] in the robot base frame (m)
         self._voice = collections.deque(maxlen=10)
@@ -94,10 +99,16 @@ class DashboardNode(Node):
             self.log(level, 'controller', msg.description)
 
     def _on_joints(self, msg):
-        moving = any(abs(v) > 0.01 for v in msg.velocity)
+        # Moving: from the positions 0.2 s ago, since fake hardware reports no velocities.
+        now, positions = time.monotonic(), list(msg.position)
+        then, before = self._joints_before
+        if now - then >= 0.2 or len(before) != len(positions):
+            self._moving = len(before) == len(positions) and any(
+                abs(a - b) > 0.002 for a, b in zip(positions, before))
+            self._joints_before = now, positions
         with self._lock:
-            self._joints = {'names': list(msg.name), 'positions': list(msg.position),
-                            'moving': moving}
+            self._joints = {'names': list(msg.name), 'positions': positions,
+                            'moving': self._moving}
             self._received['joint_states'] = time.monotonic()
 
     def _on_image(self, msg):
