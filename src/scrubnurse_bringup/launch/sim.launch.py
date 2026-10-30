@@ -51,7 +51,9 @@ def generate_launch_description():
     camera_spawner = Node(
         package='ros_gz_sim', executable='create', output='screen',
         arguments=['-name', 'overhead_camera', '-file', PathJoinSubstitution(
-            [FindPackageShare('scrubnurse_sim'), 'models', 'overhead_camera.sdf'])])
+            [FindPackageShare('scrubnurse_sim'), 'models', 'overhead_camera.sdf']),
+            # create ignores the model's own <pose>: without these it lands at the origin.
+            '-x', '-0.016', '-y', '1.0', '-z', '0.671', '-P', '1.5707963', '-Y', '3.14159265'])
 
     return LaunchDescription([
         DeclareLaunchArgument('world', default_value=f'{WORLD}.sdf',

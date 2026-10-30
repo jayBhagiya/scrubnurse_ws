@@ -4,6 +4,7 @@
   Looks straight down like the real one - image right = base -y, image down = base -x,
   about 0.6 mm per pixel on the table. The pose is in the Gazebo world frame; in the UR
   base frame it is (0.016, -1.0, 0.671), see scrubnurse_sim/cell.py (OverheadCamera).
+  sim.launch.py passes the same pose to the spawner, which ignores <pose> below.
 -->
 <sdf version="1.8">
   <model name="overhead_camera">
