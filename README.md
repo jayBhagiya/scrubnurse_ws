@@ -27,16 +27,28 @@ You can run it in three ways:
 
 ## Contents
 
-- [How it works](#how-it-works)
-- [Installation](#installation)
-- [Build and test](#build-and-test)
-- [Running](#running)
-- [Configuration](#configuration)
-- [Calibration](#calibration)
-- [Interfaces](#interfaces)
-- [Troubleshooting](#troubleshooting)
-- [Behaviour changes compared with ROS 1](#behaviour-changes-compared-with-ros-1)
-- [Status](#status)
+- [Scrubnurse (ROS 2 Humble)](#scrubnurse-ros-2-humble)
+  - [Contents](#contents)
+  - [How it works](#how-it-works)
+    - [Packages](#packages)
+  - [Installation](#installation)
+    - [1. ROS 2 Humble](#1-ros-2-humble)
+    - [2. Tools](#2-tools)
+    - [3. Get the code and its system dependencies](#3-get-the-code-and-its-system-dependencies)
+    - [4. Python virtual environment](#4-python-virtual-environment)
+    - [5. Azure Kinect SDK (only on the PC with the camera)](#5-azure-kinect-sdk-only-on-the-pc-with-the-camera)
+  - [Build and test](#build-and-test)
+  - [Running](#running)
+    - [Mock robot (no hardware)](#mock-robot-no-hardware)
+    - [Gazebo simulation](#gazebo-simulation)
+    - [Real cell](#real-cell)
+    - [Operator control](#operator-control)
+  - [Configuration](#configuration)
+  - [Calibration](#calibration)
+  - [Interfaces](#interfaces)
+  - [Troubleshooting](#troubleshooting)
+  - [Behaviour changes compared with ROS 1](#behaviour-changes-compared-with-ros-1)
+  - [Status](#status)
 
 ## How it works
 
