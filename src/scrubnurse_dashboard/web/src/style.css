@@ -140,3 +140,5 @@ select { font: inherit; padding: 7px; border-radius: 6px; border: 1px solid var(
 .steps-help { padding-left: 20px; font-size: 0.9rem; }
 .note { font-size: 0.85rem; padding: 6px 10px; border-radius: 6px; }
 .note.warn { background: var(--warn-bg); color: var(--warn); }
+.swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px;
+  vertical-align: -1px; border: 1px solid #000; }

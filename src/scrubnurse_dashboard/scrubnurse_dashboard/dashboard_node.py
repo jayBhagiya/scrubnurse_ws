@@ -42,7 +42,7 @@ from vision_msgs.msg import Detection2DArray, Detection3DArray
 
 CONTROLLER = '/scrubnurse_controller'
 STALE_AFTER = {'joint_states': 1.0, 'camera': 2.0, 'detections': 2.0}  # s
-STREAM_WIDTH = 960  # px, camera stream
+STREAM_WIDTH = 1280  # px, camera stream
 
 
 class DashboardNode(Node):
@@ -301,7 +301,7 @@ class DashboardNode(Node):
             state.draw_detections(image, detections)
         scale = STREAM_WIDTH / image.shape[1]
         image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-        jpeg = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 80])[1].tobytes()
+        jpeg = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
         with self._lock:
             self._jpeg = msg, jpeg
         return jpeg

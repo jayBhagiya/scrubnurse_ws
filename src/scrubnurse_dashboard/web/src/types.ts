@@ -30,6 +30,7 @@ export interface Health {
 }
 
 export interface Detection extends Tool {
+  color: string  // '#rrggbb', same as the box in the camera stream
   score: number
   x: number
   y: number

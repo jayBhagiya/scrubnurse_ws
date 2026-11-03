@@ -230,7 +230,7 @@ function CameraPanel({ health, detections, streamKey }:
             {detections.length === 0 && <tr><td colSpan={3} className="muted">Nothing on the table</td></tr>}
             {detections.map((d, i) => (
               <tr key={i}>
-                <td>{d.tool_name || d.tool_id}</td>
+                <td><span className="swatch" style={{ background: d.color }} aria-hidden="true" />{d.tool_name || d.tool_id}</td>
                 <td>{(d.score * 100).toFixed(0)} %</td>
                 <td>{d.position ? `${(d.position[0] * 1000).toFixed(0)}, ${(d.position[1] * 1000).toFixed(0)} mm` : '–'}</td>
               </tr>

@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 import pytest
-from scrubnurse_dashboard.state import draw_detections, freshness, refusal
+from scrubnurse_dashboard.state import bgr, draw_detections, freshness, refusal, TOOL_COLORS
 
 IDLE = {'paused': False, 'aborted': False, 'error': ''}
 PAUSED = dict(IDLE, paused=True)
@@ -47,3 +47,13 @@ def test_draw_detections():
          'width': 80, 'height': 40, 'theta': math.pi / 2}
     draw_detections(image, [d, dict(d, theta=None)])
     assert image[60, 150].any()  # top edge of the box
+
+
+def test_tool_colors_are_distinct_and_drawn():
+    assert len(set(TOOL_COLORS.values())) == 6
+    assert bgr('#e6194b') == (0x4b, 0x19, 0xe6)
+    image = np.full((200, 300, 3), 200, np.uint8)
+    d = {'tool_id': 'C', 'tool_name': 'mosquito', 'color': TOOL_COLORS['C'], 'score': 0.9,
+         'x': 150, 'y': 120, 'width': 100, 'height': 40, 'theta': None}
+    draw_detections(image, [d])
+    assert tuple(image[140, 150]) == bgr(TOOL_COLORS['C'])  # bottom edge of the box
