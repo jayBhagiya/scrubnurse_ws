@@ -3,17 +3,20 @@
 <package format="3">
   <name>scrubnurse_dashboard</name>
   <version>0.1.0</version>
-  <description>Scrubnurse dashboard: web page to watch the cell (status, arm, camera with detections, voice) and to pause, resume, abort and request tools.</description>
+  <description>Scrubnurse dashboard: web page to watch the cell (status, arm, camera with detections, voice), to pause, resume, abort and request tools, and to calibrate the camera.</description>
   <maintainer email="jabh00002@stud.uni-saarland.de">Jay Bhagiya</maintainer>
   <license>TODO</license>
 
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>scrubnurse_interfaces</exec_depend>
+  <exec_depend>scrubnurse_perception</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>std_srvs</exec_depend>
+  <exec_depend>tf2_ros_py</exec_depend>
   <exec_depend>vision_msgs</exec_depend>
   <!-- pip-only (installed into the workspace venv, see requirements.txt):
        opencv-python, fastapi, uvicorn, websockets -->

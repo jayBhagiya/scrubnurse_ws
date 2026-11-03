@@ -25,7 +25,6 @@ setup(
             'tool_detector = scrubnurse_perception.tool_detector_node:main',
             'tool_localizer = scrubnurse_perception.tool_localizer_node:main',
             'compute_homography = scrubnurse_perception.compute_homography:main',
-            'collect_calibration = scrubnurse_perception.collect_calibration:main',
             'kinect_camera = scrubnurse_perception.kinect_camera_node:main',
         ],
     },

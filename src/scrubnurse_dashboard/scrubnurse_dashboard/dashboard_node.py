@@ -6,7 +6,8 @@ tool detections (2D for the overlay, 3D for robot coordinates) and the voice
 node's events. Serves (FastAPI, see app.py) the state as JSON and over a
 WebSocket, the camera with the detections drawn in as MJPEG, and pause, resume,
 abort, recover and tool requests, which call the controller's services or
-publish on `tool_request`.
+publish on `tool_request`. The calibration page records camera-to-table pairs
+(see calibration.py).
 
 The page is built separately and installed with the package if present:
 `cd web && npm ci && npm run build`, then colcon build.
@@ -20,17 +21,22 @@ import time
 from ament_index_python.packages import get_package_share_directory
 import cv2
 from cv_bridge import CvBridge
+import numpy as np
 import rclpy
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from rclpy.signals import SignalHandlerOptions
+from rclpy.time import Time
 from scrubnurse_dashboard import state
 from scrubnurse_dashboard.app import create_app
+from scrubnurse_dashboard.calibration import Calibration, find_block
 from scrubnurse_interfaces.msg import CycleStatus, VoiceEvent
 from sensor_msgs.msg import Image, JointState
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
+from tf2_ros import Buffer, TransformException, TransformListener
 import uvicorn
 from vision_msgs.msg import Detection2DArray, Detection3DArray
 
@@ -52,6 +58,15 @@ class DashboardNode(Node):
             'pointed scissors', 'needle holder', 'mosquito', 'scalpel', 'anatomical forceps',
             'surgical forceps']).value
         self.tool_names = dict(zip(tool_ids, tool_names))
+        folder = self.declare_parameter('calibration_dir', '~/scrubnurse_calibration').value
+        self.calibration = Calibration(os.path.expanduser(folder))
+        # Expected block side in pixels and where to look for it (the table work area).
+        self._block_side = self.declare_parameter('calibration_block_px', 44.0).value
+        self._block_roi = self.declare_parameter(
+            'calibration_roi', Parameter.Type.INTEGER_ARRAY).value  # None: whole image
+        self._base_frame = self.declare_parameter('base_frame', 'base').value
+        self._tip_frame = self.declare_parameter('tip_frame', 'tool0').value
+        self._tf = None  # started by the calibration page: /tf is busy and only needed there
 
         self._lock = threading.Lock()
         self._cycle = None
@@ -214,6 +229,63 @@ class DashboardNode(Node):
     def request_tool(self, tool_id):
         self._request_pub.publish(String(data=tool_id))
         return True, f'requested the {self.tool_names[tool_id]}'
+
+    def block_now(self):
+        """Find the calibration block in the newest frame: {'u', 'v', 'corners'} or {'error'}."""
+        with self._lock:
+            msg = self._image
+        if msg is None:
+            return {'error': 'no camera image'}
+        try:
+            (u, v), corners = self._find_block(msg)
+        except ValueError as e:
+            return {'error': str(e)}
+        return {'u': u, 'v': v, 'corners': corners}
+
+    def block_pixel(self, seconds=1.0):
+        """Median block centre over the frames of the next `seconds`; store it as pending."""
+        centres, frames, last, error = [], 0, None, ''
+        end = time.monotonic() + seconds
+        while time.monotonic() < end:
+            with self._lock:
+                msg = self._image
+            if msg is not None and msg is not last:
+                last, frames = msg, frames + 1
+                try:
+                    centres.append(self._find_block(msg)[0])
+                except ValueError as e:
+                    error = str(e)
+            time.sleep(0.02)
+        if frames < 3 or len(centres) < 0.8 * frames:
+            raise ValueError(f'block found in {len(centres)} of {frames} frames'
+                             + (f': {error}' if error else ''))
+        centres = np.array(centres)
+        u, v = np.median(centres, axis=0)
+        spread = float(np.abs(centres - (u, v)).max())
+        self.calibration.set_pixel(float(u), float(v), len(centres), spread)
+        return self.calibration.state()['pending']
+
+    def tool0(self):
+        """Return the current tool0 x/y (m) in the base frame, or None."""
+        with self._lock:
+            if self._tf is None:
+                self._tf = Buffer()
+                self._tf_listener = TransformListener(self._tf, self)
+        try:
+            t = self._tf.lookup_transform(self._base_frame, self._tip_frame, Time()).transform
+        except TransformException:
+            return None
+        return {'x': t.translation.x, 'y': t.translation.y}
+
+    def image_size(self):
+        with self._lock:
+            msg = self._image
+        return None if msg is None else [msg.width, msg.height]
+
+    def _find_block(self, msg):
+        image = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        roi = None if self._block_roi is None else np.reshape(self._block_roi, (-1, 2))
+        return find_block(image, self._block_side, roi)
 
     def jpeg(self):
         """Newest camera frame with the detections drawn in, as JPEG; None before the first."""

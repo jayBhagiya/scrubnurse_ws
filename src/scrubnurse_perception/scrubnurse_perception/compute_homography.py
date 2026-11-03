@@ -1,8 +1,8 @@
 """
 Compute the camera-to-table homography from recorded pixel/robot point pairs.
 
-Input CSV columns: u, v, x, y -- pixel centre of the calibration target as seen
-by the detector, and the matching tool0 x/y in the UR `base` frame (metres). A header row
+Input CSV columns: u, v, x, y -- pixel centre of the calibration target in the
+camera image, and the matching tool0 x/y in the UR `base` frame (metres). A header row
 is optional. Writes a parameter file for the tool_localizer node.
 
     ros2 run scrubnurse_perception compute_homography pairs.csv -o homography.yaml
@@ -46,6 +46,10 @@ def main(argv=None):
     errors = homography.reprojection_errors(h, pixels, points)
     print(f'{len(pixels)} pairs, reprojection error: mean {errors.mean() * 1000:.1f} mm, '
           f'max {errors.max() * 1000:.1f} mm', file=sys.stderr)
+    if len(pixels) > 4:
+        unseen = homography.leave_one_out_errors(pixels, points)
+        print(f'error on unseen points (leave-one-out): mean {unseen.mean() * 1000:.1f} mm, '
+              f'max {unseen.max() * 1000:.1f} mm', file=sys.stderr)
     params = to_params_yaml(h)
     if args.output:
         with open(args.output, 'w') as f:

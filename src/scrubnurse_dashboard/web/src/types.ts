@@ -64,3 +64,32 @@ export interface State {
   events: LogEvent[]
   tools: Tool[]
 }
+
+// GET /api/calibration (all positions in pixels or metres).
+export interface CalibrationPair {
+  u: number
+  v: number
+  x: number
+  y: number
+  error?: number         // against the fit of all pairs
+  unseen_error?: number  // against a fit without this pair (leave-one-out)
+}
+
+export interface CalibrationState {
+  pairs: CalibrationPair[]
+  pending: { u: number; v: number; frames: number; spread: number } | null
+  fit: {
+    homography: number[]
+    yaml: string
+    mean: number
+    max: number
+    unseen_mean: number | null
+    unseen_max: number | null
+  } | null
+  fit_error: string | null
+  files: string[]
+  target: { u: number; v: number; corners: [number, number][] } | { error: string }
+  tool0: { x: number; y: number } | null
+  image_size: [number, number] | null
+  saved?: [string, string]
+}

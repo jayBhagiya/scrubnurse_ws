@@ -39,6 +39,16 @@ def test_estimate_recovers_exact_homography():
     np.testing.assert_allclose(homography.estimate(pixels, points), h_true, rtol=1e-6, atol=1e-9)
 
 
+def test_leave_one_out_flags_the_bad_pair():
+    pixels, points = load_pairs(DATA)
+    points = points.copy()
+    points[3] += 0.02  # one pair recorded 2 cm off
+    errors = homography.leave_one_out_errors(pixels, points)
+    assert errors.argmax() == 3
+    assert errors[3] > 0.015
+    assert np.median(errors) < 0.005
+
+
 def test_estimate_rejects_too_few_points():
     try:
         homography.estimate([[0, 0], [1, 0], [0, 1]], [[0, 0], [1, 0], [0, 1]])

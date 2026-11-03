@@ -85,7 +85,7 @@ Tool ids:
 
 | Package | Contents |
 |---|---|
-| `scrubnurse_perception` | `kinect_camera` (Azure Kinect driver), `tool_detector` (YOLO segmentation → pixel position + heading), `tool_localizer` (homography → grasp pose), `collect_calibration` and `compute_homography` (camera calibration) |
+| `scrubnurse_perception` | `kinect_camera` (Azure Kinect driver), `tool_detector` (YOLO segmentation → pixel position + heading), `tool_localizer` (homography → grasp pose), `compute_homography` (camera calibration from saved pairs) |
 | `scrubnurse_voice` | `voice_command` (Whisper speech → tool id; always listening for a wake word, or a record-button window) |
 | `scrubnurse_control` | `scrubnurse_controller` (task logic, MoveIt 2 motions, Robotiq gripper), `record_pose` (teach new poses) |
 | `scrubnurse_bringup` | Launch files and cell configuration: `scrubnurse.yaml`, `poses.yaml`, `sim.yaml`, UR10e and camera calibration |
@@ -378,26 +378,12 @@ about z from it.
 
 Recalibrate when the camera moves or the cell is rebuilt.
 
-**Camera → table homography.**
+**Camera → table homography:** on the dashboard's **Calibration** page, with a 40 × 40 × 10 mm
+black block and a pointer in the gripper. See [docs/calibration](docs/calibration/README.md) for
+the block's CAD file and the steps.
 
-1. Start the real cell (or at least the camera, the detector and the robot driver).
-2. Record pixel/robot pairs:
-
-   ```bash
-   ros2 run scrubnurse_perception collect_calibration --tool A -o pairs.csv
-   ```
-
-   For each pair, put one tool A on the table and press Enter. Then jog the gripper onto it and
-   press Enter again. Spread the points over the whole work area. The current fit error is printed
-   once you have four pairs. The 2024 calibration used 21 pairs.
-3. Compute the matrix, then copy it into `tool_localizer.homography` in `scrubnurse.yaml`:
-
-   ```bash
-   ros2 run scrubnurse_perception compute_homography pairs.csv -o homography.yaml
-   ```
-
-The 2024-11-22 pairs are in `src/scrubnurse_perception/test/data/`. They reproduce the current
-matrix to 1.4 mm on average.
+Earlier pairs files (2024-11-22, 2026-10-29) are in `src/scrubnurse_perception/test/data/`; the
+current matrix in `scrubnurse.yaml` comes from the 2026-10-29 pairs.
 
 **Robot poses (magazine, handover, return rack, home).**
 

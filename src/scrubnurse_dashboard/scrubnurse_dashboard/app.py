@@ -3,7 +3,8 @@ HTTP side of the dashboard: REST controls, the state WebSocket and the camera st
 
 `node` is the DashboardNode (or a stand-in in the tests) and provides snapshot(),
 health(), refusal(action), call(action), request_tool(tool_id), jpeg(), log() and
-tool_names.
+tool_names; for the calibration page also `calibration` (calibration.Calibration),
+block_now(), block_pixel(), tool0() and image_size().
 """
 
 import asyncio
@@ -71,6 +72,54 @@ def create_app(node, web_dir=None):
             raise HTTPException(422, f'unknown instrument "{instrument}"; one of: '
                                      + ', '.join(node.tool_names.values()))
         return control('request', lambda: node.request_tool(tool_id))
+
+    def calibration_step(action, step):
+        try:
+            step()
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+        node.log('info', 'calibration', action)
+        return calibration()
+
+    @app.get('/api/calibration')
+    def calibration():
+        return dict(node.calibration.state(), target=node.block_now(), tool0=node.tool0(),
+                    image_size=node.image_size())
+
+    @app.post('/api/calibration/pixel')
+    def calibration_pixel():
+        return calibration_step('pixel position recorded', node.block_pixel)
+
+    @app.delete('/api/calibration/pixel')
+    def calibration_clear_pixel():
+        return calibration_step('pixel position cleared', node.calibration.clear_pixel)
+
+    @app.post('/api/calibration/reference')
+    def calibration_reference():
+        def record():
+            tool0 = node.tool0()
+            if tool0 is None:
+                raise ValueError('no tool0 position (is the robot driver running?)')
+            node.calibration.add_reference(tool0['x'], tool0['y'])
+        return calibration_step('reference position recorded', record)
+
+    @app.delete('/api/calibration/pairs/{index}')
+    def calibration_remove(index: int):
+        return calibration_step(f'pair {index + 1} removed',
+                                lambda: node.calibration.remove(index))
+
+    @app.post('/api/calibration/save')
+    def calibration_save():
+        try:
+            paths = node.calibration.save()
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+        node.log('info', 'calibration', 'saved ' + ' and '.join(paths))
+        return dict(calibration(), saved=paths)
+
+    @app.post('/api/calibration/load')
+    def calibration_load(name: str = Body(..., embed=True)):
+        return calibration_step(f'loaded {name}', lambda: node.calibration.load(name))
 
     @app.websocket('/ws/state')
     async def state_socket(socket: WebSocket):

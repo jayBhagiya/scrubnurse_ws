@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import CalibrationPage from './Calibration'
 import type { Action, Cycle, Detection, Health, LogEvent, State, Tool, VoiceEvent } from './types'
 
 const UR_JOINTS = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
@@ -37,12 +38,24 @@ function useDashboardState() {
   return { state, connected, connections }
 }
 
+/** The page in the URL hash: #calibration, or the operation page. */
+function usePage() {
+  const [page, setPage] = useState(location.hash)
+  useEffect(() => {
+    const changed = () => setPage(location.hash)
+    window.addEventListener('hashchange', changed)
+    return () => window.removeEventListener('hashchange', changed)
+  }, [])
+  return page === '#calibration' ? 'calibration' : 'operation'
+}
+
 export default function App() {
   const { state, connected, connections } = useDashboardState()
+  const page = usePage()
   return (
     <>
-      <Header state={state} connected={connected} />
-      {!state ? <p className="waiting">Connecting to the dashboard node…</p> : (
+      <Header state={state} connected={connected} page={page} />
+      {page === 'calibration' ? <CalibrationPage /> : !state ? <p className="waiting">Connecting to the dashboard node…</p> : (
         <main>
           <div className="column">
             <StatusPanel cycle={state.cycle} />
@@ -60,12 +73,16 @@ export default function App() {
   )
 }
 
-function Header({ state, connected }: { state: State | null; connected: boolean }) {
+function Header({ state, connected, page }: { state: State | null; connected: boolean; page: string }) {
   const health = state?.health
   return (
     <header>
       <h1>Scrubnurse</h1>
       {state && <span className={`badge mode-${state.mode}`}>{state.mode.toUpperCase()}</span>}
+      <nav>
+        <a href="#" aria-current={page === 'operation' ? 'page' : undefined}>Operation</a>
+        <a href="#calibration" aria-current={page === 'calibration' ? 'page' : undefined}>Calibration</a>
+      </nav>
       <div className="health">
         <Light ok={connected} label={connected ? 'Dashboard connected' : 'Dashboard disconnected'} />
         {health && <>

@@ -37,6 +37,19 @@ def reprojection_errors(h, pixels, points):
     return np.linalg.norm(mapped - np.asarray(points, dtype=float), axis=1)
 
 
+def leave_one_out_errors(pixels, points):
+    """
+    Error of each pair against a fit made without it: how well the fit predicts new points.
+
+    The plain reprojection error measures a fit against its own pairs and is optimistic.
+    """
+    pixels = np.asarray(pixels, dtype=float)
+    points = np.asarray(points, dtype=float)
+    keep = ~np.eye(len(pixels), dtype=bool)
+    return np.array([reprojection_errors(estimate(pixels[k], points[k]), pixels[i:i + 1],
+                                         points[i:i + 1])[0] for i, k in enumerate(keep)])
+
+
 def quaternion_from_euler(roll, pitch, yaw):
     """Return the (x, y, z, w) quaternion for static-axis roll, pitch, yaw."""
     cr, sr = math.cos(roll / 2), math.sin(roll / 2)
