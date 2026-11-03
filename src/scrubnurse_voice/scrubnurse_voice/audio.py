@@ -31,6 +31,18 @@ def load_audio_file(path):
     return to_whisper_input(samples, rate)
 
 
+def hardware_inputs(devices):
+    """Names of the microphones among sounddevice.query_devices() entries (no ALSA plugins)."""
+    return [d['name'] for d in devices if d['max_input_channels'] > 0 and '(hw:' in d['name']]
+
+
+def input_devices():
+    """Microphones on this machine, e.g. 'Jabra Link 370: USB Audio (hw:2,0)'."""
+    import sounddevice
+
+    return hardware_inputs(sounddevice.query_devices())
+
+
 def record(seconds, device=None):
     """Record `seconds` of audio from the microphone as Whisper input."""
     import sounddevice

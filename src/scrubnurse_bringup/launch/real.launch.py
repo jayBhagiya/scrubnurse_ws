@@ -33,7 +33,6 @@ def generate_launch_description():
         DeclareLaunchArgument('camera', default_value='true',
                               description='Start the Azure Kinect driver'),
         DeclareLaunchArgument('image_topic', default_value='/od_camera/stream/rgb'),
-        DeclareLaunchArgument('voice_gui', default_value='true'),
         IncludeLaunchDescription(launch_file('ur_robot_driver', 'ur_control.launch.py'),
                                  launch_arguments={
                                      'ur_type': 'ur10e',
@@ -57,7 +56,6 @@ def generate_launch_description():
         IncludeLaunchDescription(launch_file('scrubnurse_bringup', 'scrubnurse.launch.py'),
                                  launch_arguments={
                                      'image_topic': arg('image_topic'),
-                                     'voice_gui': arg('voice_gui'),
                                      'robot_ip': arg('robot_ip'),
                                  }.items()),
     ])

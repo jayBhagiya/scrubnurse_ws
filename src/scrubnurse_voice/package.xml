@@ -7,6 +7,7 @@
   <maintainer email="jabh00002@stud.uni-saarland.de">Jay Bhagiya</maintainer>
   <license>TODO</license>
 
+  <exec_depend>rcl_interfaces</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>scrubnurse_interfaces</exec_depend>
   <exec_depend>std_msgs</exec_depend>
@@ -14,7 +15,6 @@
   <exec_depend>portaudio19-dev</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-scipy</exec_depend>
-  <exec_depend>python3-tk</exec_depend>
   <!-- pip-only (installed into the workspace venv, see requirements.txt):
        torch, openai-whisper, sounddevice, soundfile (pip build reads mp3) -->
 

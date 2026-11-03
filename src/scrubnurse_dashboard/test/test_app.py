@@ -13,6 +13,13 @@ class FakeNode:
         self.calibration = Calibration(folder)
         self.block = (1100.0, 500.0)
         self.position = {'x': 0.05, 'y': -0.95}
+        self.voice = {'state': 'listening', 'live': True, 'muted': False, 'input_device': '',
+                      'devices': ['Jabra Link 370: USB Audio (hw:2,0)'], 'message': '',
+                      'wake_words': ['robot']}
+        self.camera = {'serial': '000527700312', 'configured_serial': '000527700312',
+                       'serials': ['000848193812', '000527700312']}
+        self.parameters = []
+        self.parameter_answer = (True, '')
         self.calls = []
         self.answer = (True, 'ok')
         self.logs = []
@@ -55,6 +62,22 @@ class FakeNode:
 
     def image_size(self):
         return [1920, 1080]
+
+    def voice_status(self):
+        return self.voice
+
+    def camera_status(self):
+        return self.camera
+
+    def voice_listen(self):
+        self.calls.append('listen')
+        return True, 'say the command within 5 s'
+
+    def set_parameter(self, node, name, value, timeout=None):
+        if self.parameter_answer is None:
+            raise TimeoutError(f'no answer from {node}')
+        self.parameters.append((node, name, value))
+        return self.parameter_answer
 
 
 @pytest.fixture
@@ -147,3 +170,37 @@ def test_calibration_save_and_load(client, node):
     client.delete('/api/calibration/pairs/0')
     assert len(client.post('/api/calibration/load', json={'name': name}).json()['pairs']) == 5
     assert client.post('/api/calibration/load', json={'name': '/etc/passwd'}).status_code == 409
+
+
+def test_voice_controls(client, node):
+    assert client.post('/api/voice/listen').status_code == 200 and node.calls == ['listen']
+    assert client.post('/api/voice/mute', json={'muted': True}).status_code == 200
+    jabra = 'Jabra Link 370: USB Audio (hw:2,0)'
+    assert client.post('/api/voice/microphone', json={'name': jabra}).status_code == 200
+    assert client.post('/api/voice/microphone', json={'name': ''}).status_code == 200  # default
+    assert node.parameters == [('/voice_command', 'muted', True),
+                               ('/voice_command', 'input_device', jabra),
+                               ('/voice_command', 'input_device', '')]
+
+
+def test_voice_refusals(client, node):
+    assert client.post('/api/voice/microphone', json={'name': '/dev/zero'}).status_code == 422
+    node.voice = dict(node.voice, live=False)
+    assert client.post('/api/voice/mute', json={'muted': True}).status_code == 409
+    node.voice = None
+    response = client.post('/api/voice/listen')
+    assert response.status_code == 409 and 'not running' in response.json()['detail']
+    assert node.parameters == []
+
+
+def test_camera_switch(client, node):
+    assert client.post('/api/camera', json={'serial': '000848193812'}).status_code == 200
+    assert node.parameters == [('/kinect_camera', 'serial', '000848193812')]
+    assert client.post('/api/camera', json={'serial': '123'}).status_code == 422
+    node.parameter_answer = (False, 'no Azure Kinect with serial 000848193812')
+    response = client.post('/api/camera', json={'serial': '000848193812'})
+    assert response.status_code == 409 and 'no Azure Kinect' in response.json()['detail']
+    node.parameter_answer = None
+    assert client.post('/api/camera', json={'serial': '000848193812'}).status_code == 504
+    node.camera = None
+    assert client.post('/api/camera', json={'serial': '000848193812'}).status_code == 409

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import CalibrationPage from './Calibration'
-import type { Action, Cycle, Detection, Health, LogEvent, State, Tool, VoiceEvent } from './types'
+import type { Action, CameraStatus, Cycle, Detection, Health, LogEvent, State, Tool, VoiceEvent, VoiceStatus } from './types'
 
 const UR_JOINTS = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
   'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
@@ -10,6 +10,21 @@ const CYCLE_STEPS: Record<string, [string, string][]> = {
     ['returning_home', 'Back to rest']],
   return: [['picking', 'Pick up from table'], ['placing', 'Place in magazine'],
     ['returning_home', 'Back to rest']],
+}
+
+/** POST JSON to the dashboard; resolves to a line for the operator either way. */
+async function post(path: string, body?: object): Promise<{ ok: boolean; text: string }> {
+  try {
+    const response = await fetch(path, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    const data = await response.json().catch(() => ({}))
+    return response.ok ? { ok: true, text: data.message || 'done' }
+      : { ok: false, text: typeof data.detail === 'string' ? data.detail : response.statusText }
+  } catch {
+    return { ok: false, text: 'dashboard not reachable' }
+  }
 }
 
 const clock = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour12: false })
@@ -60,12 +75,13 @@ export default function App() {
           <div className="column">
             <StatusPanel cycle={state.cycle} />
             <Controls state={state} />
-            <ArmPanel arm={state.arm} health={state.health} />
+            <VoicePanel voice={state.voice} status={state.voice_status} />
           </div>
           <div className="column">
-            <CameraPanel health={state.health} detections={state.detections} streamKey={connections} />
-            <VoicePanel voice={state.voice} running={state.health.voice} />
+            <CameraPanel health={state.health} detections={state.detections} streamKey={connections}
+              camera={state.camera_status} />
           </div>
+          <ArmPanel arm={state.arm} health={state.health} />
           <EventLog events={state.events} />
         </main>
       )}
@@ -207,13 +223,14 @@ function ArmPanel({ arm, health }: { arm: State['arm']; health: Health }) {
   )
 }
 
-function CameraPanel({ health, detections, streamKey }:
-  { health: Health; detections: Detection[]; streamKey: number }) {
+function CameraPanel({ health, detections, streamKey, camera: status }:
+  { health: Health; detections: Detection[]; streamKey: number; camera: CameraStatus | null }) {
   const camera = health.topics.camera
   const detector = health.topics.detections
   return (
     <section>
       <h2>Camera and detection</h2>
+      {status && <CameraChoice status={status} />}
       <div className="camera">
         <img key={streamKey} src="/stream/camera" alt="Overhead camera with the detected instruments" />
         {camera.stale && (
@@ -242,13 +259,90 @@ function CameraPanel({ health, detections, streamKey }:
   )
 }
 
-function VoicePanel({ voice, running }: { voice: VoiceEvent[]; running: boolean }) {
-  const last = voice[0]
-  const status = !running ? 'Voice node not running'
-    : last?.kind === 'error' ? `Error: ${last.text}` : 'Listening'
+function CameraChoice({ status }: { status: CameraStatus }) {
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
+  async function choose(serial: string) {
+    if (serial !== status.configured_serial && !confirm(
+      `Camera ${serial} is not the calibrated overhead camera (${status.configured_serial}). `
+      + 'Detected positions will be wrong and picks will miss. Switch anyway?')) return
+    setBusy(true)
+    setResult(await post('/api/camera', { serial }))
+    setBusy(false)
+  }
+  const calibrated = status.serial === status.configured_serial || !status.configured_serial
+  return (
+    <div className="device-choice">
+      <label>
+        Camera{' '}
+        <select value={status.serial} disabled={busy} onChange={e => choose(e.target.value)}>
+          {status.serials.map(s => (
+            <option key={s} value={s}>{s}{s === status.configured_serial ? ' (calibrated, overhead)' : ''}</option>
+          ))}
+        </select>
+      </label>
+      {busy && <span className="muted"> switching…</span>}
+      {!calibrated && <p className="alert">Not the calibrated camera: picks will miss.</p>}
+      {result && !result.ok && <p className="alert" role="status">{result.text}</p>}
+    </div>
+  )
+}
+
+const VOICE_STATES: Record<VoiceStatus['state'], [string, string]> = {
+  listening: ['ok', 'Listening for the wake word'],
+  muted: ['warn', 'Muted'],
+  command: ['ok', 'Say the command…'],
+  processing: ['ok', 'Transcribing…'],
+  idle: ['ok', 'Push to talk to give a command'],
+  error: ['alert', 'Microphone error'],
+}
+
+/** The device name without the ALSA card number, which changes between boots. */
+const stableName = (device: string) => device.replace(/\s*\(hw:[^)]*\)$/, '')
+
+function VoicePanel({ voice, status }: { voice: VoiceEvent[]; status: VoiceStatus | null }) {
+  const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
+  async function send(path: string, body?: object) {
+    setBusy(true)
+    setResult(await post(path, body))
+    setBusy(false)
+  }
+  const [tagClass, tagText] = status ? VOICE_STATES[status.state] : ['alert', 'Voice node not running']
+  const devices = status ? [...status.devices] : []
+  if (status?.input_device && !devices.includes(status.input_device)) devices.unshift(status.input_device)
   return (
     <section>
-      <h2>Voice <span className={`tag ${running && last?.kind !== 'error' ? 'ok' : 'alert'}`}>{status}</span></h2>
+      <h2>Voice <span className={`tag ${tagClass}`} aria-live="polite">{tagText}</span></h2>
+      {status?.state === 'error' && <p className="alert">{status.message}</p>}
+      {status && (
+        <>
+          <div className="buttons">
+            <button disabled={busy || status.state === 'command' || status.state === 'processing'}
+              onClick={() => send('/api/voice/listen')}>Push to talk</button>
+            {status.live && (
+              <button disabled={busy} onClick={() => send('/api/voice/mute', { muted: !status.muted })}>
+                {status.muted ? 'Unmute' : 'Mute'}</button>
+            )}
+          </div>
+          <div className="device-choice">
+            <label>
+              Microphone{' '}
+              <select value={status.input_device} disabled={busy}
+                onChange={e => send('/api/voice/microphone', { name: e.target.value })}>
+                <option value="">System default</option>
+                {devices.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </label>
+            {status.input_device && status.devices.includes(status.input_device) && (
+              <p className="muted">Not saved. To keep it, set <code>input_device: "{stableName(status.input_device)}"</code> under
+                {' '}<code>voice_command</code> in scrubnurse.yaml.</p>
+            )}
+          </div>
+          {status.live && <p className="muted">Say “{status.wake_words[0]}, scalpel”, or press Push to talk and say “scalpel”.</p>}
+          {result && !result.ok && <p className="alert" role="status">{result.text}</p>}
+        </>
+      )}
       {voice.filter(v => v.kind === 'heard').length === 0 ? <p className="muted">Nothing heard yet.</p> : (
         <ul className="voice">
           {voice.filter(v => v.kind === 'heard').map((v, i) => (

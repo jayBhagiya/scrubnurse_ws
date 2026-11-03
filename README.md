@@ -61,7 +61,8 @@ camera ─► tool_detector ──(/tool_detections_2d)─► tool_localizer ─
 
 1. **Voice:** `voice_command` listens all the time, transcribes each phrase with Whisper and
    maps a spoken tool name to a tool id. A phrase counts only if it also contains a wake word
-   ("robot, scalpel"). With `live: false` it records a few seconds per button press instead.
+   ("robot, scalpel"), or follows **Push to talk** on the dashboard. With `live: false` it only
+   records a few seconds per Push to talk.
 2. **Detection:** `tool_detector` segments the instruments in the overhead camera image with YOLO
    and estimates each one's heading from its mask.
 3. **Localization:** `tool_localizer` converts pixels to robot coordinates on the table with a
@@ -86,7 +87,7 @@ Tool ids:
 | Package | Contents |
 |---|---|
 | `scrubnurse_perception` | `kinect_camera` (Azure Kinect driver), `tool_detector` (YOLO segmentation → pixel position + heading), `tool_localizer` (homography → grasp pose), `compute_homography` (camera calibration from saved pairs) |
-| `scrubnurse_voice` | `voice_command` (Whisper speech → tool id; always listening for a wake word, or a record-button window) |
+| `scrubnurse_voice` | `voice_command` (Whisper speech → tool id; always listening for a wake word, plus push-to-talk from the dashboard) |
 | `scrubnurse_control` | `scrubnurse_controller` (task logic, MoveIt 2 motions, Robotiq gripper), `record_pose` (teach new poses) |
 | `scrubnurse_bringup` | Launch files and cell configuration: `scrubnurse.yaml`, `poses.yaml`, `sim.yaml`, UR10e and camera calibration |
 | `scrubnurse_sim` | Gazebo cell, plus the `sim_gripper`, `sim_tool_detector` and `sim_surgeon` helpers |
@@ -300,16 +301,15 @@ Options:
    ```
 
    This starts the UR driver, MoveIt 2, the Azure Kinect, the detector, the localizer, the voice
-   window and the controller.
+   node, the controller and the dashboard (http://localhost:8080).
 4. Check the scene: tools in the magazine, nothing in the robot's way. Then resume:
 
    ```bash
    ros2 service call /scrubnurse_controller/resume std_srvs/srv/Trigger
    ```
 
-5. Click **Start Recording** in the voice window and say a tool name, for example "scalpel".
-
-   ![Voice window](docs/media/voice_start.png)
+5. Say "robot, scalpel", or press **Push to talk** on the dashboard and say "scalpel". The
+   dashboard's voice panel shows what was heard; the microphone can be chosen there too.
 
 For a first run, keep the defaults:
 
@@ -408,7 +408,9 @@ Pairs files are kept in `src/scrubnurse_perception/test/data/`; the current matr
 | `/tool_detector/annotated_image` | `sensor_msgs/Image` | Detections drawn on the camera image (view with `rqt_image_view`) |
 | `/tool_request` | `std_msgs/String` | `voice_command` → controller. Tool id, for example `B` |
 | `/voice_command/transcript` | `std_msgs/String` | Every Whisper transcript |
-| `/voice_command/listen` | `std_srvs/Trigger` | Record and transcribe without the window |
+| `/voice_command/listen` | `std_srvs/Trigger` | Push-to-talk: with `live` the next phrase needs no wake word, otherwise records `record_seconds` |
+| `/voice_command/status` | `scrubnurse_interfaces/VoiceStatus` (latched) | Listening, muted, microphone in use and the available ones. Parameters `muted` and `input_device` change at runtime |
+| `/kinect_camera/status` | `scrubnurse_interfaces/CameraStatus` (latched) | Which Azure Kinect streams; set the parameter `serial` to switch |
 | `/scrubnurse_controller/status` | `std_msgs/String` (latched) | Controller state |
 | `/scrubnurse_controller/resume`, `/pause` | `std_srvs/Trigger` | Operator control |
 

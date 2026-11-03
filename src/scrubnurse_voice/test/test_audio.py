@@ -1,5 +1,5 @@
 import numpy as np
-from scrubnurse_voice.audio import split_phrases
+from scrubnurse_voice.audio import hardware_inputs, split_phrases
 
 QUIET, LOUD = np.zeros(4), np.full(4, 0.5)
 
@@ -22,3 +22,13 @@ def test_long_speech_is_cut_at_max_length():
 
 def test_unfinished_phrase_is_not_yielded():
     assert phrases('qqLL') == []
+
+
+def test_hardware_inputs_skip_outputs_and_alsa_plugins():
+    devices = [
+        {'name': 'Jabra Link 370: USB Audio (hw:2,0)', 'max_input_channels': 1},
+        {'name': 'HDA Intel PCH: HDMI 0 (hw:0,3)', 'max_input_channels': 0},
+        {'name': 'pulse', 'max_input_channels': 32},
+        {'name': 'default', 'max_input_channels': 32},
+    ]
+    assert hardware_inputs(devices) == ['Jabra Link 370: USB Audio (hw:2,0)']

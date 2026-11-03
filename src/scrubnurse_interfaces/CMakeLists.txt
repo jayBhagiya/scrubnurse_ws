@@ -8,6 +8,8 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CycleStatus.msg"
   "msg/VoiceEvent.msg"
+  "msg/VoiceStatus.msg"
+  "msg/CameraStatus.msg"
   DEPENDENCIES builtin_interfaces
 )
 

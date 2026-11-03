@@ -6,7 +6,9 @@ tool detections (2D for the overlay, 3D for robot coordinates) and the voice
 node's events. Serves (FastAPI, see app.py) the state as JSON and over a
 WebSocket, the camera with the detections drawn in as MJPEG, and pause, resume,
 abort, recover and tool requests, which call the controller's services or
-publish on `tool_request`. The calibration page records camera-to-table pairs
+publish on `tool_request`. Voice: mute, push-to-talk and the microphone (parameters
+and ~/listen of the voice node); camera: which Azure Kinect streams (parameter
+`serial` of kinect_camera). The calibration page records camera-to-table pairs
 (see calibration.py).
 
 The page is built separately and installed with the package if present:
@@ -22,6 +24,7 @@ from ament_index_python.packages import get_package_share_directory
 import cv2
 from cv_bridge import CvBridge
 import numpy as np
+from rcl_interfaces.srv import SetParameters
 import rclpy
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.node import Node
@@ -32,7 +35,7 @@ from rclpy.time import Time
 from scrubnurse_dashboard import state
 from scrubnurse_dashboard.app import create_app
 from scrubnurse_dashboard.calibration import Calibration, find_block
-from scrubnurse_interfaces.msg import CycleStatus, VoiceEvent
+from scrubnurse_interfaces.msg import CameraStatus, CycleStatus, VoiceEvent, VoiceStatus
 from sensor_msgs.msg import Image, JointState
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -41,6 +44,8 @@ import uvicorn
 from vision_msgs.msg import Detection2DArray, Detection3DArray
 
 CONTROLLER = '/scrubnurse_controller'
+VOICE = '/voice_command'
+CAMERA = '/kinect_camera'
 STALE_AFTER = {'joint_states': 1.0, 'camera': 2.0, 'detections': 2.0}  # s
 STREAM_WIDTH = 1280  # px, camera stream
 
@@ -76,6 +81,8 @@ class DashboardNode(Node):
         self._detections = []
         self._positions = {}    # tool id -> [x, y] in the robot base frame (m)
         self._voice = collections.deque(maxlen=10)
+        self._voice_status = None
+        self._camera_status = None
         self._events = collections.deque(maxlen=200)
         self._received = dict.fromkeys(STALE_AFTER)  # topic -> time.monotonic() of the last one
         self._image = None
@@ -91,7 +98,12 @@ class DashboardNode(Node):
         self.create_subscription(Image, 'image', self._on_image, qos_profile_sensor_data)
         self.create_subscription(Detection2DArray, '/tool_detections_2d', self._on_detections, 10)
         self.create_subscription(Detection3DArray, '/tool_detections', self._on_positions, 10)
-        self.create_subscription(VoiceEvent, '/voice_command/events', self._on_voice, 10)
+        self.create_subscription(VoiceEvent, f'{VOICE}/events', self._on_voice, 10)
+        self.create_subscription(VoiceStatus, f'{VOICE}/status', self._on_voice_status, latched)
+        self.create_subscription(CameraStatus, f'{CAMERA}/status', self._on_camera_status, latched)
+        self._listen = self.create_client(Trigger, f'{VOICE}/listen')
+        self._parameters = {node: self.create_client(SetParameters, f'{node}/set_parameters')
+                            for node in (VOICE, CAMERA)}
         self._request_pub = self.create_publisher(String, '/tool_request', 10)
         self._triggers = {action: self.create_client(Trigger, f'{CONTROLLER}/{action}')
                           for action in ('pause', 'resume', 'abort', 'recover')}
@@ -158,6 +170,23 @@ class DashboardNode(Node):
         elif msg.wake_word:
             self.log('warn', 'voice', f'Heard "{msg.text}": no instrument recognised')
 
+    def _on_voice_status(self, msg):
+        status = {name: getattr(msg, name) for name in (
+            'state', 'message', 'live', 'muted', 'input_device')}
+        status['devices'], status['wake_words'] = list(msg.devices), list(msg.wake_words)
+        with self._lock:
+            self._voice_status = status
+
+    def _on_camera_status(self, msg):
+        with self._lock:
+            self._camera_status = {'serial': msg.serial, 'serials': list(msg.serials),
+                                   'configured_serial': msg.configured_serial}
+        if msg.serial != msg.configured_serial and msg.configured_serial:
+            self.log('warn', 'camera', f'streaming {msg.serial}, not the calibrated camera '
+                                       f'{msg.configured_serial}: picks will miss')
+        else:
+            self.log('info', 'camera', f'streaming {msg.serial}')
+
     def _update_health(self):
         now = time.monotonic()
         with self._lock:
@@ -167,7 +196,8 @@ class DashboardNode(Node):
             'mode': self.mode,
             'node': True,
             'controller': self._triggers['pause'].service_is_ready(),
-            'voice': self.count_publishers('/voice_command/events') > 0,
+            'voice': self.count_publishers(f'{VOICE}/events') > 0,
+            'camera_node': self.count_publishers(f'{CAMERA}/status') > 0,
             'topics': topics,
         }
         for name, topic in topics.items():
@@ -177,10 +207,11 @@ class DashboardNode(Node):
                 self.log('warn' if topic['stale'] else 'info', 'health',
                          f'{name} {"stale" if topic["stale"] else "back"}')
             self._stale[name] = topic['stale']
-        for name in ('controller', 'voice'):
+        for name in ('controller', 'voice', 'camera_node'):
             if name in self._health and health[name] != self._health[name]:
+                label = name.replace('_', ' ')
                 self.log('info' if health[name] else 'warn', 'health',
-                         f'{name} {"running" if health[name] else "not running"}')
+                         f'{label} {"running" if health[name] else "not running"}')
         self._health = health
 
     # Used by the web app (other threads)
@@ -210,21 +241,49 @@ class DashboardNode(Node):
                 'detections': [dict(d, position=self._positions.get(d['tool_id']))
                                for d in self._detections],
                 'voice': list(self._voice),
+                'voice_status': self._voice_status if self._health.get('voice') else None,
+                'camera_status': self._camera_status if self._health.get('camera_node') else None,
                 'events': list(self._events),
                 'tools': [{'tool_id': k, 'tool_name': v} for k, v in self.tool_names.items()],
             }
 
     def call(self, action):
         """Call a controller Trigger service; return (success, message)."""
-        client = self._triggers[action]
-        done = threading.Event()
-        future = client.call_async(Trigger.Request())
-        future.add_done_callback(lambda _: done.set())
-        if not done.wait(self._call_timeout):
-            client.remove_pending_request(future)
-            raise TimeoutError(f'no answer from the controller within {self._call_timeout:.0f} s')
-        response = future.result()
+        response = self._call(self._triggers[action], Trigger.Request(), 'the controller')
         return response.success, response.message
+
+    def voice_listen(self):
+        """Push-to-talk: the voice node takes the next phrase without a wake word."""
+        response = self._call(self._listen, Trigger.Request(), 'the voice node',
+                              timeout=self._call_timeout + 10.0)  # without live it records first
+        return response.success, response.message
+
+    def set_parameter(self, node, name, value, timeout=None):
+        """Set a parameter of another node; return (success, reason)."""
+        parameter = Parameter(name, value=value).to_parameter_msg()
+        request = SetParameters.Request(parameters=[parameter])
+        result = self._call(self._parameters[node], request, node, timeout).results[0]
+        return result.successful, result.reason
+
+    def voice_status(self):
+        """Return the voice node's last status, or None while it is not running."""
+        with self._lock:
+            return self._voice_status if self._health.get('voice') else None
+
+    def camera_status(self):
+        """Return the camera node's last status, or None while it is not running."""
+        with self._lock:
+            return self._camera_status if self._health.get('camera_node') else None
+
+    def _call(self, client, request, who, timeout=None):
+        timeout = timeout or self._call_timeout
+        done = threading.Event()
+        future = client.call_async(request)
+        future.add_done_callback(lambda _: done.set())
+        if not done.wait(timeout):
+            client.remove_pending_request(future)
+            raise TimeoutError(f'no answer from {who} within {timeout:.0f} s')
+        return future.result()
 
     def request_tool(self, tool_id):
         self._request_pub.publish(String(data=tool_id))

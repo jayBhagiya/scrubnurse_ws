@@ -3,8 +3,10 @@ Azure Kinect RGB-D camera, the ROS 2 port of media_streamer/kinect_streamer.py (
 
 Publishes `image` (bgr8), `depth` (16UC1, millimetres, transformed into the
 colour camera) and, when `camera_info_file` is set, `camera_info` from a ROS
-camera calibration YAML. Needs the Azure Kinect SDK and pyk4a
-(requirements-camera.txt).
+camera calibration YAML. With several cameras connected, `serial` chooses one; setting
+it at runtime switches cameras. `~/status` (scrubnurse_interfaces/CameraStatus,
+latched) tells which camera streams and which are connected. Needs the Azure Kinect
+SDK and pyk4a (requirements-camera.txt).
 """
 
 import threading
@@ -12,9 +14,12 @@ import threading
 import cv2
 from cv_bridge import CvBridge
 import numpy as np
+from rcl_interfaces.msg import SetParametersResult
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from scrubnurse_interfaces.msg import CameraStatus
 from sensor_msgs.msg import CameraInfo, Image
 import yaml
 
@@ -59,6 +64,8 @@ def open_camera(pyk4a, config, serial):
     """
     Open the Azure Kinect with this serial; with "" only if exactly one is connected.
 
+    Return the opened device and its device index.
+
     The device order changes between boots, so with several cameras "the first one" is
     a different camera on different days.
     """
@@ -68,9 +75,13 @@ def open_camera(pyk4a, config, serial):
     serials = []
     for device_id in range(count):
         device = pyk4a.PyK4A(config=config, device_id=device_id)
-        device.open()
+        try:
+            device.open()
+        except Exception:  # in use by another program
+            serials.append(f'(device {device_id} in use)')
+            continue
         if device.serial == serial or (not serial and count == 1):
-            return device
+            return device, device_id
         serials.append(device.serial)
         device.close()
     if not serial:
@@ -79,11 +90,33 @@ def open_camera(pyk4a, config, serial):
     raise RuntimeError(f'no Azure Kinect with serial {serial}; connected: {", ".join(serials)}')
 
 
+def connected_serials(pyk4a, config, open_id, open_serial):
+    """
+    List the serials of the Azure Kinects this node can use.
+
+    `open_id`/`open_serial` is the device it streams from. Devices opened by another
+    program cannot be opened to read their serial and are left out.
+    """
+    serials = []
+    for device_id in range(pyk4a.connected_device_count()):
+        if device_id == open_id:
+            serials.append(open_serial)
+            continue
+        device = pyk4a.PyK4A(config=config, device_id=device_id)
+        try:
+            device.open()
+        except Exception:  # in use by another program
+            continue
+        serials.append(device.serial)
+        device.close()
+    return serials
+
+
 class KinectCamera(Node):
 
     def __init__(self):
         super().__init__('kinect_camera')
-        serial = self.declare_parameter('serial', '').value
+        self._configured_serial = serial = self.declare_parameter('serial', '').value
         self._color_format = self.declare_parameter('color_format', 'COLOR_MJPG').value
         resolution = self.declare_parameter('color_resolution', 'RES_1080P').value
         depth_mode = self.declare_parameter('depth_mode', 'WFOV_2X2BINNED').value
@@ -95,13 +128,14 @@ class KinectCamera(Node):
 
         import pyk4a
 
-        config = pyk4a.Config(
+        self._pyk4a = pyk4a
+        self._config = config = pyk4a.Config(
             color_resolution=pyk4a.ColorResolution[resolution],
             depth_mode=pyk4a.DepthMode[depth_mode],
             synchronized_images_only=synchronized,
             color_format=pyk4a.ImageFormat[self._color_format],
             camera_fps=pyk4a.FPS[fps])
-        self._camera = open_camera(pyk4a, config, serial)
+        self._camera, self._device_id = open_camera(pyk4a, config, serial)
         self._camera.start()
 
         self._camera_info = camera_info_from_yaml(info_file) if info_file else None
@@ -109,10 +143,37 @@ class KinectCamera(Node):
         self._image_pub = self.create_publisher(Image, 'image', 10)
         self._depth_pub = self.create_publisher(Image, 'depth', 10)
         self._info_pub = self.create_publisher(CameraInfo, 'camera_info', 10)
+        latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self._status_pub = self.create_publisher(CameraStatus, '~/status', latched)
+        self._start_streaming()
+        self.add_on_set_parameters_callback(self._on_parameters)
+
+    def _start_streaming(self):
         self._running = True
         self._thread = threading.Thread(target=self._stream, daemon=True)
         self._thread.start()
         self.get_logger().info(f'Streaming Azure Kinect {self._camera.serial}')
+        self._status_pub.publish(CameraStatus(
+            stamp=self.get_clock().now().to_msg(), serial=self._camera.serial,
+            configured_serial=self._configured_serial,
+            serials=connected_serials(self._pyk4a, self._config, self._device_id,
+                                      self._camera.serial)))
+
+    def _on_parameters(self, params):
+        serial = next((p.value for p in params if p.name == 'serial'), None)
+        if serial is None or serial == self._camera.serial:
+            return SetParametersResult(successful=True)
+        old = self._camera.serial
+        self.close()  # pyk4a's stop() also closes the device
+        try:
+            self._camera, self._device_id = open_camera(self._pyk4a, self._config, serial)
+            result = SetParametersResult(successful=True)
+        except Exception as e:  # keep streaming from the previous camera
+            self._camera, self._device_id = open_camera(self._pyk4a, self._config, old)
+            result = SetParametersResult(successful=False, reason=str(e))
+        self._camera.start()
+        self._start_streaming()
+        return result
 
     def _stream(self):
         try:

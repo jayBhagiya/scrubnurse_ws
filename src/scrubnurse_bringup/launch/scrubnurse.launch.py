@@ -31,7 +31,6 @@ ARGUMENTS = [
     ('detector', 'true', 'Start the YOLO tool detector'),
     ('localizer', 'true', 'Start the tool localizer (pixels to robot coordinates)'),
     ('voice', 'true', 'Start the voice command node'),
-    ('voice_gui', 'true', 'Show the voice recording window'),
     ('dashboard', 'true', 'Start the web dashboard'),
     ('dashboard_mode', 'real', 'Shown on the dashboard: real, sim or mock'),
     ('dashboard_host', '127.0.0.1',
@@ -53,7 +52,7 @@ def generate_launch_description():
         Node(package='scrubnurse_perception', executable='tool_localizer', output='screen',
              parameters=params, condition=IfCondition(arg('localizer'))),
         Node(package='scrubnurse_voice', executable='voice_command', output='screen',
-             parameters=[*params, {'use_gui': arg('voice_gui')}],
+             parameters=params,
              condition=IfCondition(arg('voice'))),
         Node(package='scrubnurse_dashboard', executable='dashboard', output='screen',
              parameters=[*params, {

@@ -26,6 +26,7 @@ export interface Health {
   node: boolean
   controller: boolean
   voice: boolean
+  camera_node: boolean
   topics: Record<'joint_states' | 'camera' | 'detections', Freshness>
 }
 
@@ -47,6 +48,22 @@ export interface VoiceEvent extends Tool {
   wake_word: boolean
 }
 
+export interface VoiceStatus {
+  state: 'listening' | 'muted' | 'command' | 'processing' | 'idle' | 'error'
+  message: string
+  live: boolean
+  muted: boolean
+  input_device: string  // '' = system default
+  devices: string[]
+  wake_words: string[]
+}
+
+export interface CameraStatus {
+  serial: string             // streaming now
+  configured_serial: string  // the calibrated overhead camera
+  serials: string[]
+}
+
 export interface LogEvent {
   time: number
   level: 'info' | 'warn' | 'error'
@@ -62,6 +79,8 @@ export interface State {
   arm: { names: string[]; positions: number[]; moving: boolean } | null
   detections: Detection[]
   voice: VoiceEvent[]
+  voice_status: VoiceStatus | null    // null: voice node not running
+  camera_status: CameraStatus | null  // null: no Azure Kinect node (e.g. in the sim)
   events: LogEvent[]
   tools: Tool[]
 }

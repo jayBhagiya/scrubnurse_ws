@@ -3,8 +3,9 @@ HTTP side of the dashboard: REST controls, the state WebSocket and the camera st
 
 `node` is the DashboardNode (or a stand-in in the tests) and provides snapshot(),
 health(), refusal(action), call(action), request_tool(tool_id), jpeg(), log() and
-tool_names; for the calibration page also `calibration` (calibration.Calibration),
-block_now(), block_pixel(), tool0() and image_size().
+tool_names; for voice and camera voice_status(), camera_status(), voice_listen() and
+set_parameter(node, name, value); for the calibration page also `calibration`
+(calibration.Calibration), block_now(), block_pixel(), tool0() and image_size().
 """
 
 import asyncio
@@ -72,6 +73,54 @@ def create_app(node, web_dir=None):
             raise HTTPException(422, f'unknown instrument "{instrument}"; one of: '
                                      + ', '.join(node.tool_names.values()))
         return control('request', lambda: node.request_tool(tool_id))
+
+    def node_call(source, action, call):
+        """Run a call to the voice or camera node: 504 on timeout, 409 when it refuses."""
+        try:
+            ok, message = call()
+        except TimeoutError as e:
+            node.log('error', source, f'{action}: {e}')
+            raise HTTPException(504, str(e))
+        if not ok:
+            node.log('warn', source, f'{action} refused: {message}')
+            raise HTTPException(409, message or 'refused')
+        node.log('info', source, f'{action}: {message}' if message else action)
+        return {'ok': True, 'message': message}
+
+    def running_voice():
+        status = node.voice_status()
+        if status is None:
+            raise HTTPException(409, 'the voice node is not running')
+        return status
+
+    @app.post('/api/voice/listen')
+    def voice_listen():
+        running_voice()
+        return node_call('voice', 'push-to-talk', node.voice_listen)
+
+    @app.post('/api/voice/mute')
+    def voice_mute(muted: bool = Body(..., embed=True)):
+        if not running_voice()['live']:
+            raise HTTPException(409, 'the voice node only listens on push-to-talk (live: false)')
+        return node_call('voice', 'mute' if muted else 'unmute',
+                         lambda: node.set_parameter('/voice_command', 'muted', muted))
+
+    @app.post('/api/voice/microphone')
+    def voice_microphone(name: str = Body(..., embed=True)):
+        if name and name not in running_voice()['devices']:
+            raise HTTPException(422, f'unknown microphone "{name}"')
+        return node_call('voice', f'microphone: {name or "system default"}',
+                         lambda: node.set_parameter('/voice_command', 'input_device', name))
+
+    @app.post('/api/camera')
+    def camera_select(serial: str = Body(..., embed=True)):
+        status = node.camera_status()
+        if status is None:
+            raise HTTPException(409, 'the camera node is not running')
+        if serial not in status['serials']:
+            raise HTTPException(422, f'no Azure Kinect "{serial}" connected')
+        return node_call('camera', f'switch to {serial}', lambda: node.set_parameter(
+            '/kinect_camera', 'serial', serial, timeout=15.0))  # reopening takes a few seconds
 
     def calibration_step(action, step):
         try:

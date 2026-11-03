@@ -3,7 +3,8 @@ import os
 import cv2
 import numpy as np
 import pytest
-from scrubnurse_perception.kinect_camera_node import camera_info_from_yaml, open_camera, to_bgr
+from scrubnurse_perception.kinect_camera_node import camera_info_from_yaml, connected_serials
+from scrubnurse_perception.kinect_camera_node import open_camera, to_bgr
 
 CELL_CAMERA = os.path.join(os.path.dirname(__file__), '..', '..', 'scrubnurse_bringup', 'config',
                            'azure_kinect_rgb_1080P.yaml')
@@ -43,6 +44,8 @@ class FakeDevice:
         self.serial, self.opened = serial, False
 
     def open(self):
+        if self.opened:
+            raise RuntimeError('device already open')
         self.opened = True
 
     def close(self):
@@ -64,13 +67,13 @@ class FakePyK4A:
 
 def test_open_camera_by_serial():
     pyk4a = FakePyK4A('000848193812', '000527700312')
-    camera = open_camera(pyk4a, None, '000527700312')
-    assert camera.serial == '000527700312' and camera.opened
+    camera, device_id = open_camera(pyk4a, None, '000527700312')
+    assert camera.serial == '000527700312' and camera.opened and device_id == 1
     assert not pyk4a.devices[0].opened  # the other one is closed again
 
 
 def test_open_the_only_camera_without_serial():
-    assert open_camera(FakePyK4A('000527700312'), None, '').serial == '000527700312'
+    assert open_camera(FakePyK4A('000527700312'), None, '')[0].serial == '000527700312'
 
 
 @pytest.mark.parametrize('serial, message', [
@@ -80,3 +83,26 @@ def test_open_the_only_camera_without_serial():
 def test_open_camera_refuses_to_guess(serial, message):
     with pytest.raises(RuntimeError, match=message.replace('(', r'\(').replace(')', r'\)')):
         open_camera(FakePyK4A('000848193812', '000527700312'), None, serial)
+
+
+def test_connected_serials_include_the_streaming_camera():
+    pyk4a = FakePyK4A('000848193812', '000527700312')
+    streaming, device_id = open_camera(pyk4a, None, '000527700312')
+    assert connected_serials(pyk4a, None, device_id, streaming.serial) == [
+        '000848193812', '000527700312']
+    assert streaming.opened and not pyk4a.devices[0].opened
+
+
+def test_connected_serials_skip_cameras_used_by_other_programs():
+    pyk4a = FakePyK4A('000848193812', '000527700312')
+    pyk4a.devices[1].open()  # another program streams from it
+    streaming, device_id = open_camera(pyk4a, None, '000848193812')
+    assert connected_serials(pyk4a, None, device_id, streaming.serial) == ['000848193812']
+
+
+def test_open_camera_skips_cameras_used_by_other_programs():
+    pyk4a = FakePyK4A('000848193812', '000527700312')
+    pyk4a.devices[0].open()  # another program streams from it
+    assert open_camera(pyk4a, None, '000527700312')[1] == 1
+    with pytest.raises(RuntimeError, match='device 0 in use'):
+        open_camera(pyk4a, None, '000848193812')
