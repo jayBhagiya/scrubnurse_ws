@@ -55,6 +55,30 @@ def camera_info_from_yaml(path):
     return info
 
 
+def open_camera(pyk4a, config, serial):
+    """
+    Open the Azure Kinect with this serial; with "" only if exactly one is connected.
+
+    The device order changes between boots, so with several cameras "the first one" is
+    a different camera on different days.
+    """
+    count = pyk4a.connected_device_count()
+    if count == 0:
+        raise RuntimeError('no Azure Kinect connected')
+    serials = []
+    for device_id in range(count):
+        device = pyk4a.PyK4A(config=config, device_id=device_id)
+        device.open()
+        if device.serial == serial or (not serial and count == 1):
+            return device
+        serials.append(device.serial)
+        device.close()
+    if not serial:
+        raise RuntimeError(f'{count} Azure Kinects connected ({", ".join(serials)}): '
+                           'set kinect_camera.serial to the overhead one')
+    raise RuntimeError(f'no Azure Kinect with serial {serial}; connected: {", ".join(serials)}')
+
+
 class KinectCamera(Node):
 
     def __init__(self):
@@ -77,7 +101,7 @@ class KinectCamera(Node):
             synchronized_images_only=synchronized,
             color_format=pyk4a.ImageFormat[self._color_format],
             camera_fps=pyk4a.FPS[fps])
-        self._camera = self._open(pyk4a, config, serial)
+        self._camera = open_camera(pyk4a, config, serial)
         self._camera.start()
 
         self._camera_info = camera_info_from_yaml(info_file) if info_file else None
@@ -89,18 +113,6 @@ class KinectCamera(Node):
         self._thread = threading.Thread(target=self._stream, daemon=True)
         self._thread.start()
         self.get_logger().info(f'Streaming Azure Kinect {self._camera.serial}')
-
-    def _open(self, pyk4a, config, serial):
-        count = pyk4a.connected_device_count()
-        if count == 0:
-            raise RuntimeError('no Azure Kinect connected')
-        for device_id in range(count):
-            device = pyk4a.PyK4A(config=config, device_id=device_id)
-            device.open()
-            if not serial or device.serial == serial:
-                return device
-            device.close()
-        raise RuntimeError(f'no Azure Kinect with serial {serial} among {count} device(s)')
 
     def _stream(self):
         try:

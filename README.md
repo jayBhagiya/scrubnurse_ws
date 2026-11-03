@@ -361,7 +361,7 @@ Parameters you are most likely to change:
 | `voice_command` | `model` | medium.en | Whisper model; `small.en` or `base.en` on CPU |
 | | `record_seconds` | 5.0 | Length of one recording |
 | | `input_device` | "" (default) | Microphone name or index; list them with `.venv/bin/python -m sounddevice` |
-| `kinect_camera` | `serial` | "" | Camera to open; "" opens the first one |
+| `kinect_camera` | `serial` | overhead camera | Camera to open; "" only works with a single Azure Kinect connected |
 
 **Using a different robot:** extract its factory calibration and point `real.launch.py` at it:
 
@@ -441,7 +441,7 @@ matrix to 1.4 mm on average.
 | YOLO or Whisper is slow | Check `.venv/bin/python -c "import torch; print(torch.cuda.is_available())"`. If False on a GPU machine, update the NVIDIA driver and rerun `./scripts/setup_venv.sh`. |
 | `numpy` / `cv_bridge` import errors after installing extra pip packages | Humble needs NumPy 1.x. Rerun `./scripts/setup_venv.sh` to restore the pinned versions. |
 | Gripper activation fails on the real robot | Check that the Robotiq Grippers URCap is installed and that `gripper.host` is the robot IP. |
-| `kinect_camera` fails with `no Azure Kinect connected` | Check the USB 3 connection and the udev rule, and run `k4aviewer` if you have it. With several cameras, set `serial`. |
+| `kinect_camera` fails with `no Azure Kinect connected` | Check the USB 3 connection and the udev rule, and run `k4aviewer` if you have it. With several cameras connected, `serial` must name the overhead one (the node lists the connected serials). |
 
 ## Behaviour changes compared with ROS 1
 

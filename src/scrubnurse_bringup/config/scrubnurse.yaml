@@ -4,7 +4,9 @@
 kinect_camera:
   ros__parameters:
     # Overhead Azure Kinect of the cell (ROS 1: media_streamer/kinect_camera.launch).
-    serial: ""
+    # The overhead camera. Two Azure Kinects are connected and their order changes between
+    # boots, so the camera is chosen by serial (k4arecorder --list shows them).
+    serial: "000527700312"
     color_resolution: RES_1080P
     color_format: COLOR_MJPG
     depth_mode: WFOV_2X2BINNED

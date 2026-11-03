@@ -10,7 +10,6 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -33,8 +32,6 @@ def generate_launch_description():
         DeclareLaunchArgument('launch_rviz', default_value='true'),
         DeclareLaunchArgument('camera', default_value='true',
                               description='Start the Azure Kinect driver'),
-        DeclareLaunchArgument('camera_serial', default_value='',
-                              description='Azure Kinect to open (k4arecorder --list); "" = first'),
         DeclareLaunchArgument('image_topic', default_value='/od_camera/stream/rgb'),
         DeclareLaunchArgument('voice_gui', default_value='true'),
         IncludeLaunchDescription(launch_file('ur_robot_driver', 'ur_control.launch.py'),
@@ -52,8 +49,7 @@ def generate_launch_description():
                                  }.items()),
         Node(package='scrubnurse_perception', executable='kinect_camera', output='screen',
              parameters=[config('scrubnurse.yaml'), {
-                 'camera_info_file': config('azure_kinect_rgb_1080P.yaml'),
-                 'serial': ParameterValue(arg('camera_serial'), value_type=str)}],
+                 'camera_info_file': config('azure_kinect_rgb_1080P.yaml')}],
              remappings=[('image', arg('image_topic')),
                          ('depth', '/od_camera/stream/depth'),
                          ('camera_info', '/od_camera/camera_info')],
