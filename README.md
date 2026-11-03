@@ -382,8 +382,8 @@ Recalibrate when the camera moves or the cell is rebuilt.
 black block and a pointer in the gripper. See [docs/calibration](docs/calibration/README.md) for
 the block's CAD file and the steps.
 
-Earlier pairs files (2024-11-22, 2026-10-29) are in `src/scrubnurse_perception/test/data/`; the
-current matrix in `scrubnurse.yaml` comes from the 2026-10-29 pairs.
+Pairs files are kept in `src/scrubnurse_perception/test/data/`; the current matrix in
+`scrubnurse.yaml` comes from the 2026-11-03 pairs.
 
 **Robot poses (magazine, handover, return rack, home).**
 

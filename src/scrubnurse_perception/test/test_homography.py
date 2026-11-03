@@ -23,6 +23,17 @@ def test_real_cell_matrix_reproduces_calibration_pairs():
     assert errors.max() < 0.0035
 
 
+def test_configured_matrix_matches_its_calibration_pairs():
+    config = os.path.join(os.path.dirname(__file__), '..', '..', 'scrubnurse_bringup', 'config',
+                          'scrubnurse.yaml')
+    with open(config) as f:
+        values = yaml.safe_load(f)['tool_localizer']['ros__parameters']['homography']
+    pixels, points = load_pairs(os.path.join(os.path.dirname(__file__), 'data',
+                                             'calibration_pairs_2026-11-03.csv'))
+    errors = homography.reprojection_errors(homography.as_matrix(values), pixels, points)
+    assert errors.mean() < 0.002 and errors.max() < 0.004
+
+
 def test_estimate_is_as_good_as_the_real_cell_matrix():
     pixels, points = load_pairs(DATA)
     h = homography.estimate(pixels, points)
