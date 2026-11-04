@@ -25,7 +25,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
-TOOLS = ['tool_A', 'tool_B', 'tool_C', 'tool_D', 'tool_E', 'tool_F', 'tool_C_table']
+TOOLS = ['tool_A', 'tool_B', 'tool_C', 'tool_D', 'tool_E', 'tool_F']
 WORLD = 'scrubnurse_cell'
 
 

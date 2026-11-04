@@ -87,7 +87,7 @@ docker compose up --build
 ```
 
 1. When the log quiets down (about a minute), open http://localhost:8080.
-2. Press **Resume**. The arm first returns tool C, which starts on the table.
+2. Press **Resume**. All six instruments start in the magazine.
 3. Click an instrument under *Request an instrument*. The arm picks it from the magazine and hands
    it over; the simulated surgeon lays it back on the table 15 s later, and the arm returns it.
 

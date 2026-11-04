@@ -6,7 +6,7 @@
   Everything is placed in the frame "ur_base", the UR `base` frame of poses.yaml (ROS 2
   base_link / Gazebo world rotated 180 deg about z). Holders sit where the recorded poses put
   a held tool - an upright magazine (A..F), the surgeon's hand at the handover pose P (visual
-  only), an upright return rack (RA..RF) and the work table. Tools are 9 cm stand-ins (shaft plus handle towards +x).
+  only) and the work table. Tools are 9 cm stand-ins (shaft plus handle towards +x).
   The overhead camera is a separate model (models/overhead_camera.sdf), spawned by
   sim.launch.py with camera:=true once the controllers are up.
 -->

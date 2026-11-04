@@ -25,7 +25,7 @@
   <xacro:arg name="initial_positions_file"
              default="$(find scrubnurse_sim)/config/initial_positions.yaml"/>
   <xacro:property name="initial_positions_file" value="$(arg initial_positions_file)"/>
-  <xacro:property name="tools" value="${['tool_A', 'tool_B', 'tool_C', 'tool_D', 'tool_E', 'tool_F', 'tool_C_table']}"/>
+  <xacro:property name="tools" value="${['tool_A', 'tool_B', 'tool_C', 'tool_D', 'tool_E', 'tool_F']}"/>
 
   <xacro:include filename="$(find ur_description)/urdf/ur_macro.xacro"/>
 

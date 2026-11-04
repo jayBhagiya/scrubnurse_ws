@@ -10,10 +10,11 @@ the holders are placed so that a tool held there rests in them:
                     below the handle
   handover (P)      gripper horizontal along +x: a cradle (the surgeon's hand)
                     under the horizontal tool
-  return rack (R*)  gripper horizontal along +-y: a tool picked flat from the
-                    table hangs upright and drops into a slot
   work table        tools lie flat; return-area grasp heights 0.246..0.249
 The surgeon's hand at P is visual only: sim_surgeon takes the tool on release.
+The return poses (R*) put a tool back into its magazine slot from the side; the
+held stand-in hangs short of the slot, so sim_gripper sets it into the slot on
+release.
 
 Run after re-teaching poses:
     cd src/scrubnurse_sim
@@ -116,27 +117,11 @@ def generate(poses):
         tools += tool(f'tool_{t}', t, (gx, gy, origin_z), (0.0, -math.pi / 2, 0.0))
     links += block('magazine', (-0.92, -0.67), (-0.20, -0.035), min(floors), GREY)
 
-    # Return rack: tools hang upright, handle down, below the horizontal gripper.
-    for group, ids in (('return_abc', 'ABC'), ('return_def', 'DEF')):
-        rack_floors, xs, ys = [], [], []
-        for t in ids:
-            gx, gy, gz = grasp_point(poses[f'R{t}'])
-            floor = gz - (HANDLE_X + HANDLE[0] / 2) - 0.002
-            rack_floors.append(floor)
-            xs.append(gx)
-            ys.append(gy)
-            links += cup(f'return_{t}', gx, gy, floor)
-        links += block(group, (min(xs) - 0.04, max(xs) + 0.04), (min(ys) - 0.04, max(ys) + 0.04),
-                       min(rack_floors), GREY)
-
     # Handover: the surgeon's hand under the horizontal tool (gripper points along +x at P).
     # Visual only - sim_surgeon takes the tool on release, so the retreat is not blocked.
     px, py, pz = grasp_point(poses['P'])
     links += box('surgeon_hand', (px + 0.03, py, pz - SHAFT[2] / 2 - 0.01), (0.12, 0.08, 0.02),
                  '0.95 0.8 0.7 1', collide=False)
-
-    # A tool already lying in the return area, heading along base +x (handle towards +x).
-    tools += tool('tool_C_table', 'C', (0.02, -0.95, TABLE_TOP + SHAFT[2] / 2), (0.0, 0.0, 0.0))
     return links, tools
 
 
