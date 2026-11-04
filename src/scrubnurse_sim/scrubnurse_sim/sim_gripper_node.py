@@ -76,16 +76,17 @@ class SimGripper(Node):
         ActionServer(self, GripperCommand, '/gripper_controller/gripper_cmd', self._execute,
                      callback_group=group)
         # Gazebo creates every detachable joint attached when the robot spawns. Release all
-        # tools once the robot is up (first finger joint state), a few times to be safe.
+        # tools from the start, so they are free before the arm first moves (it would drag
+        # them out of the magazine), until a few times after the robot is up.
         self._robot_up = False
         self._release_count = 0
         self._release_timer = self.create_timer(0.5, self._release_all, callback_group=group)
 
     def _release_all(self):
-        if not self._robot_up:
-            return
         for pub in self._detach_pubs.values():
             pub.publish(Empty())
+        if not self._robot_up:
+            return
         self._release_count += 1
         if self._release_count >= 6:
             self._release_timer.cancel()

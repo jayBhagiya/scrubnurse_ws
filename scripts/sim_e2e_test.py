@@ -34,8 +34,14 @@ def call(path, body=None):
         return None
 
 
+def ready(state):
+    """Controller up, and camera images arriving: the cameras start after the arm controllers."""
+    topics = state['health']['topics']
+    return not topics['joint_states']['stale'] and not topics['camera']['stale']
+
+
 def wait_for(what, timeout, check):
-    """Poll the state until check(cycle) is true; exit with the last state on timeout."""
+    """Poll the state until check(cycle, state) is true; exit with the last state on timeout."""
     deadline = time.monotonic() + timeout
     cycle = None
     while time.monotonic() < deadline:
@@ -43,7 +49,7 @@ def wait_for(what, timeout, check):
         cycle = (state or {}).get('cycle')
         if cycle and (cycle['error'] or cycle['aborted']):
             sys.exit(f'FAIL while waiting for {what}: {cycle}')
-        if cycle and check(cycle):
+        if cycle and check(cycle, state):
             print(f'ok: {what}')
             return cycle
         time.sleep(1)
@@ -51,16 +57,19 @@ def wait_for(what, timeout, check):
 
 
 def main():
-    wait_for('controller', 300, lambda c: True)
+    wait_for('simulation ready', 300, lambda c, s: ready(s))
+    # shortcut: the arm's trajectory controller can start up to 10 s after the cameras (its
+    # spawner retries a lost reply after 10 s) and the dashboard does not show it; wait it out.
+    time.sleep(15)
     print(call('/api/resume', {}))
-    wait_for('resumed', 30, lambda c: not c['paused'])
-    wait_for('rest position', 120, lambda c: c['phase'] == 'idle')
+    wait_for('resumed', 30, lambda c, s: not c['paused'])
+    wait_for('rest position', 120, lambda c, s: c['phase'] == 'idle')
     print(call('/api/request', {'instrument': TOOL_NAME}))
     handover = wait_for('handover', 60,
-                        lambda c: c['kind'] == 'handover' and c['tool_id'] == TOOL_ID)
-    wait_for('return', 180, lambda c: c['kind'] == 'return' and c['tool_id'] == TOOL_ID
+                        lambda c, s: c['kind'] == 'handover' and c['tool_id'] == TOOL_ID)
+    wait_for('return', 180, lambda c, s: c['kind'] == 'return' and c['tool_id'] == TOOL_ID
              and c['cycle_id'] > handover['cycle_id'])
-    wait_for('tool back in the magazine', 120, lambda c: c['phase'] == 'idle')
+    wait_for('tool back in the magazine', 120, lambda c, s: c['phase'] == 'idle')
     print('PASS')
 
 
