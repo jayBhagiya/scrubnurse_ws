@@ -28,3 +28,8 @@ soundfile==0.14.0
 fastapi==0.135.3
 uvicorn==0.49.0
 websockets==16.0
+# Pinned dependencies of FastAPI: newer anyio registers a pytest plugin that Ubuntu's
+# pytest 6.2 cannot load; httpx is needed by the tests' TestClient.
+anyio==4.11.0
+starlette==1.0.0
+httpx==0.28.1

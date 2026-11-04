@@ -1,5 +1,7 @@
 # Scrubnurse (ROS 2 Humble)
 
+[![CI](https://github.com/jayBhagiya/scrubnurse_ws/actions/workflows/ci.yml/badge.svg)](https://github.com/jayBhagiya/scrubnurse_ws/actions/workflows/ci.yml)
+
 A UR10e acts as a scrub nurse. The surgeon asks for an instrument by voice and the robot hands it
 over from the magazine. When the surgeon puts an instrument back on the table, the overhead camera
 detects it and the robot returns it to the magazine. A web dashboard shows and controls the whole
@@ -100,6 +102,10 @@ to watch the 3D scene in Gazebo itself, use [path 2](#gazebo-simulation).
 Stop with Ctrl-C (or `docker compose down`). The containers use ROS domain 42
 (`SIM_ROS_DOMAIN_ID`), so they don't disturb a robot on the same network. The dashboard is only
 reachable from this PC.
+
+To check the whole cycle without clicking, start the containers with `docker compose up -d` and run
+`python3 scripts/sim_e2e_test.py`: it requests the scalpel and passes once it is back in the
+magazine (about two minutes). CI runs it, together with all unit tests, on every push.
 
 ## 2. Simulation on your PC
 

@@ -26,7 +26,7 @@ RUN apt-get update \
  && rosdep update --rosdistro humble \
  && rosdep install --from-paths src --ignore-src -y \
  && apt-get install -y --no-install-recommends python3-pip xvfb \
- && grep -E '^(fastapi|uvicorn|websockets)==' requirements.txt | xargs pip3 install --no-cache-dir \
+ && grep -E '^(fastapi|uvicorn|websockets|anyio|starlette|httpx)==' requirements.txt | xargs pip3 install --no-cache-dir \
  && rm -rf /var/lib/apt/lists/*
 
 COPY src src

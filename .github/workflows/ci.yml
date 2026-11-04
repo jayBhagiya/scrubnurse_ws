@@ -1,0 +1,41 @@
+# Builds the Docker image (which also type-checks and builds the dashboard page) and runs
+# every package's unit and lint tests inside it, then runs the simulated cell through one
+# handover and return (scripts/sim_e2e_test.py). The image has no PyTorch or Whisper; the
+# Whisper tests skip themselves.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: scrubnurse:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Unit and lint tests
+        # The image keeps only install/; colcon test needs build/ again.
+        run: >
+          docker run --rm scrubnurse:latest bash -c
+          "colcon build --symlink-install && colcon test && colcon test-result --verbose"
+      - name: Start the simulation
+        run: docker compose up -d
+      - name: End-to-end test (request, handover, return)
+        run: python3 scripts/sim_e2e_test.py
+      - name: Simulation log
+        if: failure()
+        run: docker compose logs --no-color --tail 300
+      - name: Stop the simulation
+        if: always()
+        run: docker compose down
