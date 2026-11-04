@@ -6,11 +6,6 @@ are moved through finger_controller. When the gripper closes narrower than a
 tool and a tool lies between the fingertips, that tool is attached to the
 gripper with its Gazebo DetachableJoint (the fingers stop on it and the result
 reports `stalled`); opening wider than a tool detaches it again.
-
-Every tool starts in the magazine and is first grasped there, so its pose at the
-first grasp is its slot. Released within `slot_radius` of that slot (the return
-poses R*), the tool is set back into it: the real instrument is long enough to
-reach the slot from the side, the stand-in is not.
 """
 
 import threading
@@ -24,7 +19,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.time import Time
-from scrubnurse_sim.cell import set_pose, tool_class
+from scrubnurse_sim.cell import tool_class
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Empty, Float64MultiArray, String
 from tf2_msgs.msg import TFMessage
@@ -46,7 +41,7 @@ def in_grasp_region(tool_in_tcp, half_x=0.015, half_y=0.03, z_range=(0.11, 0.20)
     Return True if a tool centre given in the tool0 frame lies between the fingertips.
 
     Flat tools are grasped at their centre (0.146 m along tool0 z), upright magazine tools
-    2.5 cm above it (centre at 0.171 m).
+    5 mm above it (centre at 0.151 m).
     """
     x, y, z = tool_in_tcp
     return abs(x) <= half_x and abs(y) <= half_y and z_range[0] <= z <= z_range[1]
@@ -59,9 +54,6 @@ class SimGripper(Node):
         self._stroke = self.declare_parameter('stroke', 0.025).value
         self._tool_width = self.declare_parameter('tool_width', 0.012).value
         self._tools = list(self.declare_parameter('tools', TOOLS).value)
-        self._world = self.declare_parameter('world', 'scrubnurse_cell').value
-        self._slot_radius = self.declare_parameter('slot_radius', 0.2).value
-        self._slots = {}
         group = ReentrantCallbackGroup()
         self._buffer = Buffer()
         self._listener = TransformListener(self._buffer, self)
@@ -103,9 +95,8 @@ class SimGripper(Node):
         with self._lock:
             for t in msg.transforms:
                 if tool_class(t.child_frame_id):
-                    p, q = t.transform.translation, t.transform.rotation
-                    self._tool_poses[t.child_frame_id] = (np.array([p.x, p.y, p.z]),
-                                                          (q.x, q.y, q.z, q.w))
+                    p = t.transform.translation
+                    self._tool_poses[t.child_frame_id] = np.array([p.x, p.y, p.z])
 
     def _on_joints(self, msg):
         if 'finger_left_joint' in msg.name:
@@ -122,7 +113,7 @@ class SimGripper(Node):
         t = np.array([tf.translation.x, tf.translation.y, tf.translation.z])
         with self._lock:
             poses = dict(self._tool_poses)
-        for name, (position, _) in poses.items():
+        for name, position in poses.items():
             if name in self._attach_pubs and in_grasp_region(r.T @ (position - t)):
                 return name
         return None
@@ -135,8 +126,6 @@ class SimGripper(Node):
             if self._attached is None:
                 self._attached = self._tool_between_fingers()
                 if self._attached is not None:
-                    with self._lock:
-                        self._slots.setdefault(self._attached, self._tool_poses[self._attached])
                     self._attach_pubs[self._attached].publish(Empty())
                     self.get_logger().info(f'grasped {self._attached}')
             if self._attached is not None:
@@ -146,7 +135,6 @@ class SimGripper(Node):
             self._detach_pubs[self._attached].publish(Empty())
             self.get_logger().info(f'released {self._attached}')
             self._released_pub.publish(String(data=self._attached))
-            self._put_back(self._attached)
             self._attached = None
 
         self._command_pub.publish(Float64MultiArray(data=[target, target]))
@@ -160,16 +148,6 @@ class SimGripper(Node):
         result.stalled = stalled
         result.reached_goal = not stalled
         return result
-
-    def _put_back(self, name):
-        with self._lock:
-            slot, now = self._slots.get(name), self._tool_poses.get(name)
-        if slot is None or now is None or np.linalg.norm(now[0] - slot[0]) > self._slot_radius:
-            return
-        if set_pose(self._world, name, slot[0], slot[1]):
-            self.get_logger().info(f'put {name} back into its magazine slot')
-        else:
-            self.get_logger().error(f'could not put {name} back (Gazebo set_pose failed)')
 
 
 def main(args=None):

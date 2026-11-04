@@ -114,6 +114,9 @@ def generate_launch_description():
             launch_arguments={
                 'override_params_file': PathJoinSubstitution(
                     [FindPackageShare('scrubnurse_bringup'), 'config', 'sim.yaml']),
+                # Return poses moved for the short stand-in tools (scripts/generate_world.py).
+                'poses_file': PathJoinSubstitution(
+                    [FindPackageShare('scrubnurse_sim'), 'config', 'poses.yaml']),
                 'use_sim_time': 'true',
                 'detector': 'false',
                 'gripper_backend': 'action',

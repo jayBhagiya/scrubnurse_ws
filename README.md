@@ -175,7 +175,7 @@ Options:
 - `voice:=true` starts the voice node (needs a microphone).
 - `render_engine:=ogre2` looks better on native Linux; keep the default `ogre` under WSL.
 
-After re-teaching poses, regenerate the world:
+After re-teaching poses, regenerate the world and the simulation's return poses (`scrubnurse_sim/config/poses.yaml`):
 `python3 src/scrubnurse_sim/scripts/generate_world.py src/scrubnurse_bringup/config/poses.yaml src/scrubnurse_sim/worlds/scrubnurse_cell.sdf`.
 
 ### Mock robot

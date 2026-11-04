@@ -11,16 +11,32 @@ set_pose service.
 
 import itertools
 import math
+import subprocess
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from scrubnurse_sim.cell import base_to_world, set_pose, tool_class, world_to_base, yaw_of
+from scrubnurse_sim.cell import base_to_world, tool_class, world_to_base, yaw_of
 from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 
 # Where used instruments are put down: inside the return area, flat on the table (base frame).
 TABLE_SPOTS = [(0.08, -0.85, 0.4), (-0.06, -1.05, -0.6), (0.14, -1.08, 1.2), (-0.10, -0.85, 0.0)]
+
+
+def set_pose(world, name, x, y, z, yaw):
+    """Move a Gazebo model (world frame); return True on success."""
+    qz, qw = math.sin(yaw / 2), math.cos(yaw / 2)
+    request = (f'name: "{name}", position: {{x: {x:.4f}, y: {y:.4f}, z: {z:.4f}}}, '
+               f'orientation: {{x: 0, y: 0, z: {qz:.6f}, w: {qw:.6f}}}')
+    try:
+        result = subprocess.run(
+            ['ign', 'service', '-s', f'/world/{world}/set_pose', '--reqtype', 'ignition.msgs.Pose',
+             '--reptype', 'ignition.msgs.Boolean', '--timeout', '2000', '--req', request],
+            capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return 'data: true' in result.stdout
 
 
 class SimSurgeon(Node):
@@ -67,9 +83,7 @@ class SimSurgeon(Node):
             self.get_logger().info(f'put {name} down at ({x:+.2f}, {y:+.2f}) for return')
 
     def _move(self, name, x, y, z, yaw):
-        x, y, z, yaw = base_to_world(x, y, z, yaw)
-        q = (0.0, 0.0, math.sin(yaw / 2), math.cos(yaw / 2))
-        if set_pose(self._world, name, (x, y, z), q):
+        if set_pose(self._world, name, *base_to_world(x, y, z, yaw)):
             return True
         self.get_logger().error(f'could not move {name} (Gazebo set_pose failed)')
         return False

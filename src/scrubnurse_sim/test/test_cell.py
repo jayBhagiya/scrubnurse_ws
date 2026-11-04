@@ -1,5 +1,6 @@
 import math
 import os
+import sys
 
 import numpy as np
 import pytest
@@ -76,5 +77,24 @@ def test_grasp_region():
     assert in_grasp_region((0.0, 0.0, 0.146))
     assert in_grasp_region((0.01, -0.02, 0.13))
     assert not in_grasp_region((0.03, 0.0, 0.146))
-    assert in_grasp_region((0.0, 0.0, 0.171))
+    assert in_grasp_region((0.0, 0.0, 0.151))
     assert not in_grasp_region((0.0, 0.0, 0.25))
+
+
+def test_sim_return_poses_lower_each_tool_into_its_slot():
+    here = os.path.dirname(__file__)
+    cell_poses = os.path.join(here, '..', '..', 'scrubnurse_bringup', 'config', 'poses.yaml')
+    if not os.path.exists(cell_poses):
+        pytest.skip('scrubnurse_bringup sources not next to this package')
+    sys.path.insert(0, os.path.join(here, '..', 'scripts'))
+    from generate_world import grasp_point, sim_poses, slot
+    with open(cell_poses) as f:
+        poses = yaml.safe_load(f)['poses']
+    with open(os.path.join(here, '..', 'config', 'poses.yaml')) as f:
+        generated = yaml.safe_load(f)['poses']
+    assert generated == sim_poses(poses), 'rerun scripts/generate_world.py'
+    for t in 'ABCDEF':
+        x, y, floor, _ = slot(poses[t])
+        gx, gy, gz = grasp_point(generated[f'R{t}'])
+        assert (gx, gy) == pytest.approx((x, y), abs=1e-3)
+        assert 0.0 < gz - 0.055 - floor < 0.01  # handle end just above the slot floor

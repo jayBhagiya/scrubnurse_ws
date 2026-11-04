@@ -8,7 +8,6 @@ frame, rotated 180 degrees about z.
 
 from dataclasses import dataclass
 import math
-import subprocess
 
 import numpy as np
 
@@ -18,25 +17,10 @@ TOOL_ON_TABLE_Z = 0.101
 
 
 def tool_class(model_name):
-    """Return the tool id of a Gazebo tool model ('tool_C' -> 'C'), else None."""
+    """Return the tool id of a Gazebo tool model ('tool_C_table' -> 'C'), else None."""
     if not model_name.startswith(TOOL_PREFIX):
         return None
     return model_name[len(TOOL_PREFIX):].split('_')[0] or None
-
-
-def set_pose(world, name, position, orientation):
-    """Move a Gazebo model to a world-frame position and quaternion; return True on success."""
-    (x, y, z), (qx, qy, qz, qw) = position, orientation
-    request = (f'name: "{name}", position: {{x: {x:.4f}, y: {y:.4f}, z: {z:.4f}}}, '
-               f'orientation: {{x: {qx:.6f}, y: {qy:.6f}, z: {qz:.6f}, w: {qw:.6f}}}')
-    try:
-        result = subprocess.run(
-            ['ign', 'service', '-s', f'/world/{world}/set_pose', '--reqtype', 'ignition.msgs.Pose',
-             '--reptype', 'ignition.msgs.Boolean', '--timeout', '2000', '--req', request],
-            capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return 'data: true' in result.stdout
 
 
 def world_to_base(x, y, z, yaw):

@@ -111,7 +111,7 @@
     </model>
 
     <model name="tool_A">
-      <pose relative_to="ur_base">-0.8731 -0.1563 0.2790 0.000000 -1.570796 0.000000</pose>
+      <pose relative_to="ur_base">-0.8731 -0.1563 0.2990 0.000000 1.570796 0.000000</pose>
       <link name="link">
         <inertial><mass>0.03</mass><inertia><ixx>1e-6</ixx><iyy>2e-5</iyy><izz>2e-5</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
         <collision name="shaft"><geometry><box><size>0.07 0.012 0.012</size></box></geometry></collision>
@@ -121,7 +121,7 @@
       </link>
     </model>
     <model name="tool_B">
-      <pose relative_to="ur_base">-0.7961 -0.1563 0.2790 0.000000 -1.570796 0.000000</pose>
+      <pose relative_to="ur_base">-0.7961 -0.1563 0.2990 0.000000 1.570796 0.000000</pose>
       <link name="link">
         <inertial><mass>0.03</mass><inertia><ixx>1e-6</ixx><iyy>2e-5</iyy><izz>2e-5</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
         <collision name="shaft"><geometry><box><size>0.07 0.012 0.012</size></box></geometry></collision>
@@ -131,7 +131,7 @@
       </link>
     </model>
     <model name="tool_C">
-      <pose relative_to="ur_base">-0.7181 -0.1583 0.2791 0.000000 -1.570796 0.000000</pose>
+      <pose relative_to="ur_base">-0.7181 -0.1583 0.2991 0.000000 1.570796 0.000000</pose>
       <link name="link">
         <inertial><mass>0.03</mass><inertia><ixx>1e-6</ixx><iyy>2e-5</iyy><izz>2e-5</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
         <collision name="shaft"><geometry><box><size>0.07 0.012 0.012</size></box></geometry></collision>
@@ -141,7 +141,7 @@
       </link>
     </model>
     <model name="tool_D">
-      <pose relative_to="ur_base">-0.8760 -0.0771 0.2790 0.000000 -1.570796 0.000000</pose>
+      <pose relative_to="ur_base">-0.8760 -0.0771 0.2990 0.000000 1.570796 0.000000</pose>
       <link name="link">
         <inertial><mass>0.03</mass><inertia><ixx>1e-6</ixx><iyy>2e-5</iyy><izz>2e-5</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
         <collision name="shaft"><geometry><box><size>0.07 0.012 0.012</size></box></geometry></collision>
@@ -151,7 +151,7 @@
       </link>
     </model>
     <model name="tool_E">
-      <pose relative_to="ur_base">-0.7901 -0.0771 0.2790 0.000000 -1.570796 0.000000</pose>
+      <pose relative_to="ur_base">-0.7901 -0.0771 0.2990 0.000000 1.570796 0.000000</pose>
       <link name="link">
         <inertial><mass>0.03</mass><inertia><ixx>1e-6</ixx><iyy>2e-5</iyy><izz>2e-5</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
         <collision name="shaft"><geometry><box><size>0.07 0.012 0.012</size></box></geometry></collision>
@@ -161,7 +161,7 @@
       </link>
     </model>
     <model name="tool_F">
-      <pose relative_to="ur_base">-0.7165 -0.0798 0.2791 0.000000 -1.570796 0.000000</pose>
+      <pose relative_to="ur_base">-0.7165 -0.0798 0.2991 0.000000 1.570796 0.000000</pose>
       <link name="link">
         <inertial><mass>0.03</mass><inertia><ixx>1e-6</ixx><iyy>2e-5</iyy><izz>2e-5</izz><ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia></inertial>
         <collision name="shaft"><geometry><box><size>0.07 0.012 0.012</size></box></geometry></collision>
