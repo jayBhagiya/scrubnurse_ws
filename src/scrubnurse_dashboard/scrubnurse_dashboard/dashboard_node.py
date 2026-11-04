@@ -50,6 +50,13 @@ STALE_AFTER = {'joint_states': 1.0, 'camera': 2.0, 'detections': 2.0}  # s
 STREAM_WIDTH = 1280  # px, camera stream
 
 
+def encode(image):
+    """Scale a BGR image to the stream width and encode it as JPEG."""
+    scale = STREAM_WIDTH / image.shape[1]
+    image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    return cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+
+
 class DashboardNode(Node):
 
     def __init__(self):
@@ -87,6 +94,8 @@ class DashboardNode(Node):
         self._received = dict.fromkeys(STALE_AFTER)  # topic -> time.monotonic() of the last one
         self._image = None
         self._jpeg = None, None  # (image message, its encoded overlay)
+        self._scene = None
+        self._scene_jpeg = None, None
         self._bridge = CvBridge()
         self._health = {}
         self._stale = {}
@@ -96,6 +105,9 @@ class DashboardNode(Node):
         self.create_subscription(JointState, '/joint_states', self._on_joints,
                                  qos_profile_sensor_data)
         self.create_subscription(Image, 'image', self._on_image, qos_profile_sensor_data)
+        if self.mode == 'sim':  # side view of the simulated cell (scrubnurse_sim scene_camera)
+            self.create_subscription(Image, '/scene_camera/image', self._on_scene,
+                                     qos_profile_sensor_data)
         self.create_subscription(Detection2DArray, '/tool_detections_2d', self._on_detections, 10)
         self.create_subscription(Detection3DArray, '/tool_detections', self._on_positions, 10)
         self.create_subscription(VoiceEvent, f'{VOICE}/events', self._on_voice, 10)
@@ -142,6 +154,10 @@ class DashboardNode(Node):
         with self._lock:
             self._image = msg
             self._received['camera'] = time.monotonic()
+
+    def _on_scene(self, msg):
+        with self._lock:
+            self._scene = msg
 
     def _on_detections(self, msg):
         detections = [state.detection_dict(d, self.tool_names) for d in msg.detections]
@@ -358,11 +374,20 @@ class DashboardNode(Node):
         image = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         if fresh:
             state.draw_detections(image, detections)
-        scale = STREAM_WIDTH / image.shape[1]
-        image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-        jpeg = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
+        jpeg = encode(image)
         with self._lock:
             self._jpeg = msg, jpeg
+        return jpeg
+
+    def scene_jpeg(self):
+        """Newest frame of the simulation's side view as JPEG; None without one."""
+        with self._lock:
+            msg, (cached_msg, cached) = self._scene, self._scene_jpeg
+        if msg is None or msg is cached_msg:
+            return cached
+        jpeg = encode(self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8'))
+        with self._lock:
+            self._scene_jpeg = msg, jpeg
         return jpeg
 
 

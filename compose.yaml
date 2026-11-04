@@ -13,13 +13,14 @@ services:
   sim:
     <<: *ros
     build: {context: ., dockerfile: docker/Dockerfile}
-    # Gazebo renders the overhead camera without a display through a virtual X server.
-    # exec: Ctrl-C / docker stop reaches ros2 launch, which shuts the nodes down.
+    # Gazebo renders the cameras without a display through a virtual X server (its lock file
+    # survives a container restart, hence rm). exec: Ctrl-C / docker stop reaches ros2 launch,
+    # which shuts the nodes down.
     command:
       - bash
       - -c
       - >-
-        Xvfb :99 -screen 0 1280x720x24 -nolisten tcp & export DISPLAY=:99 &&
+        rm -f /tmp/.X99-lock; Xvfb :99 -screen 0 1280x720x24 -nolisten tcp & export DISPLAY=:99;
         exec ros2 launch scrubnurse_bringup sim.launch.py
         gazebo_gui:=false launch_rviz:=false camera:=true dashboard:=false
     ipc: shareable  # the dashboard shares it: Fast DDS uses shared memory between the two

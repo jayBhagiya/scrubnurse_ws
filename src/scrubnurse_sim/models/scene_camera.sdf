@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!--
+  Side view of the simulated cell for the dashboard, spawned with the overhead camera by
+  sim.launch.py (camera:=true), which also passes this pose to the spawner. It renders in the
+  Gazebo server, so it needs no display and works in Docker. Uses the Sensors system that
+  overhead_camera.sdf loads.
+-->
+<sdf version="1.8">
+  <model name="scene_camera">
+    <static>true</static>
+    <pose>-1.8 2.4 1.5 0 0.394 -0.7086</pose>
+    <link name="link">
+      <sensor name="camera" type="camera">
+        <camera>
+          <horizontal_fov>1.0</horizontal_fov>
+          <image><width>1280</width><height>720</height><format>R8G8B8</format></image>
+          <clip><near>0.05</near><far>20.0</far></clip>
+        </camera>
+        <always_on>1</always_on>
+        <update_rate>5</update_rate>
+        <topic>scene_camera/image</topic>
+      </sensor>
+    </link>
+  </model>
+</sdf>

@@ -3,8 +3,9 @@ HTTP side of the dashboard: REST controls, the state WebSocket and the camera st
 
 `node` is the DashboardNode (or a stand-in in the tests) and provides snapshot(),
 health(), refusal(action), call(action), request_tool(tool_id), jpeg(), log() and
-tool_names; for voice and camera voice_status(), camera_status(), voice_listen() and
-set_parameter(node, name, value); for the calibration page also `calibration`
+tool_names; scene_jpeg() for the simulation's side view; for voice and camera voice_status(),
+camera_status(), voice_listen() and set_parameter(node, name, value); for the calibration page
+also `calibration`
 (calibration.Calibration), block_now(), block_pixel(), tool0() and image_size().
 """
 
@@ -180,17 +181,24 @@ def create_app(node, web_dir=None):
         except WebSocketDisconnect:
             pass
 
-    @app.get('/stream/camera')
-    async def camera():
+    def stream(newest_jpeg):
         async def frames():
             last = None
             while True:
-                jpeg = await asyncio.to_thread(node.jpeg)  # encodes the newest frame once
+                jpeg = await asyncio.to_thread(newest_jpeg)  # encodes the newest frame once
                 if jpeg is not None and jpeg is not last:
                     last = jpeg
                     yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n')
                 await asyncio.sleep(STREAM_PERIOD)
         return StreamingResponse(frames(), media_type='multipart/x-mixed-replace; boundary=frame')
+
+    @app.get('/stream/camera')
+    async def camera():
+        return stream(node.jpeg)
+
+    @app.get('/stream/scene')
+    async def scene():
+        return stream(node.scene_jpeg)
 
     if web_dir and os.path.isdir(web_dir):
         # follow_symlink: colcon --symlink-install links the files to web/dist

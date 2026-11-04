@@ -1,54 +1,43 @@
 # Scrubnurse (ROS 2 Humble)
 
-A UR10e acts as a scrub nurse. The surgeon asks for an instrument by voice and
-the robot hands it over from the magazine. When the surgeon puts an instrument
-back on the table, the overhead camera detects it and the robot returns it to
-the return rack.
+A UR10e acts as a scrub nurse. The surgeon asks for an instrument by voice and the robot hands it
+over from the magazine. When the surgeon puts an instrument back on the table, the overhead camera
+detects it and the robot returns it to the magazine. A web dashboard shows and controls the whole
+cycle.
 
-This workspace is the ROS 2 Humble port of the Scrubnurse proof of concept
-built on ROS 1 Noetic. It ports every ROS 1 package the Scrubnurse
-used:
+[![Full run on the real cell (YouTube)](docs/media/demo.jpg)](https://youtu.be/0U6RoegLIow)
 
-- `voice_recognition_scrubnurse`
-- `od_scrubnurse`
-- `od_homography`, including its calibration tool
-- `media_streamer` (Azure Kinect)
-- `robot_controller`
+*▶ [Watch a full run on the real cell](https://youtu.be/0U6RoegLIow): dashboard, side view and
+front view.*
 
-The UR driver and MoveIt configuration come from apt.
+![Dashboard on the real cell](docs/media/dashboard.jpg)
 
-You can run it in three ways:
+## Three ways to run it
 
-| Mode | Needs | Launch file |
-|---|---|---|
-| Mock robot | Nothing but this PC | `mock.launch.py` |
-| Gazebo simulation | Nothing but this PC (WSL works) | `sim.launch.py` |
-| Real cell | UR10e, Robotiq gripper, Azure Kinect, microphone | `real.launch.py` |
+| | Path | For | Needs |
+|---|---|---|---|
+| 1 | [Simulation in Docker](#1-simulation-in-docker) | Seeing the whole cycle run | Docker only |
+| 2 | [Simulation on your PC](#2-simulation-on-your-pc) | Changing code, poses or parameters | Ubuntu 22.04 + ROS 2 Humble ([Installation](#installation)) |
+| 3 | [Real cell](#3-real-cell) | Running the robot | Path 2's installation, plus a UR10e, Robotiq gripper, Azure Kinect and microphone |
+
+All three use the same dashboard at http://localhost:8080 ([Operating the cell](#operating-the-cell)).
 
 ## Contents
 
-- [Scrubnurse (ROS 2 Humble)](#scrubnurse-ros-2-humble)
-  - [Contents](#contents)
-  - [How it works](#how-it-works)
-    - [Packages](#packages)
+- [How it works](#how-it-works)
+- [1. Simulation in Docker](#1-simulation-in-docker)
+- [2. Simulation on your PC](#2-simulation-on-your-pc)
   - [Installation](#installation)
-    - [1. ROS 2 Humble](#1-ros-2-humble)
-    - [2. Tools](#2-tools)
-    - [3. Get the code and its system dependencies](#3-get-the-code-and-its-system-dependencies)
-    - [4. Python virtual environment](#4-python-virtual-environment)
-    - [5. Azure Kinect SDK (only on the PC with the camera)](#5-azure-kinect-sdk-only-on-the-pc-with-the-camera)
-  - [Build and test](#build-and-test)
-  - [Running](#running)
-    - [Mock robot (no hardware)](#mock-robot-no-hardware)
-    - [Gazebo simulation](#gazebo-simulation)
-    - [Real cell](#real-cell)
-    - [Operator control](#operator-control)
-  - [Configuration](#configuration)
-  - [Calibration](#calibration)
-  - [Interfaces](#interfaces)
-  - [Troubleshooting](#troubleshooting)
-  - [Behaviour changes compared with ROS 1](#behaviour-changes-compared-with-ros-1)
-  - [Status](#status)
+  - [Gazebo simulation](#gazebo-simulation)
+  - [Mock robot](#mock-robot)
+- [3. Real cell](#3-real-cell)
+  - [Running the cell](#running-the-cell)
+  - [Camera calibration](#camera-calibration)
+  - [Robot poses](#robot-poses)
+- [Operating the cell](#operating-the-cell)
+- [Configuration](#configuration)
+- [Interfaces](#interfaces)
+- [Troubleshooting](#troubleshooting)
 
 ## How it works
 
@@ -56,409 +45,312 @@ You can run it in three ways:
 microphone ─► voice_command ──(/tool_request, String "B")─────────────────────────┐
 camera ─► tool_detector ──(/tool_detections_2d)─► tool_localizer ──(/tool_detections)─┤
                                                                                      ▼
-                                     scrubnurse_controller ─► MoveIt 2 ─► UR10e + Robotiq gripper
+                     dashboard ◄──► scrubnurse_controller ─► MoveIt 2 ─► UR10e + Robotiq gripper
 ```
 
-1. **Voice:** `voice_command` listens all the time, transcribes each phrase with Whisper and
-   maps a spoken tool name to a tool id. A phrase counts only if it also contains a wake word
-   ("robot, scalpel"), or follows **Push to talk** on the dashboard. With `live: false` it only
-   records a few seconds per Push to talk.
-2. **Detection:** `tool_detector` segments the instruments in the overhead camera image with YOLO
-   and estimates each one's heading from its mask.
+1. **Voice:** `voice_command` listens all the time and transcribes each phrase with Whisper. A
+   phrase counts if it contains a wake word and a tool name ("robot, scalpel"), or follows
+   **Push to talk** on the dashboard.
+2. **Detection:** `tool_detector` segments the instruments in the overhead image with YOLO and
+   estimates each one's heading from its mask.
 3. **Localization:** `tool_localizer` converts pixels to robot coordinates on the table with a
    calibrated homography.
-4. **Control:** `scrubnurse_controller` hands requested tools over first. When none are queued, it
-   returns tools lying in the table's return area to the rack. It moves along straight lines
-   between taught poses with MoveIt 2 and drives the gripper.
+4. **Control:** `scrubnurse_controller` serves requests first. When none are queued, it returns
+   tools lying in the table's return area. It moves between taught poses with MoveIt 2.
+5. **Dashboard:** status, controls, the camera view with each detected tool in its own colour,
+   the voice panel, the arm state, an event log and the calibration page.
 
-Tool ids:
-
-| Id | Instrument |
-|---|---|
-| A | pointed scissors |
-| B | needle holder |
-| C | mosquito clamp |
-| D | scalpel |
-| E | anatomical forceps |
-| F | surgical forceps |
-
-### Packages
+| Id | Instrument | | Id | Instrument |
+|---|---|---|---|---|
+| A | pointed scissors | | D | scalpel |
+| B | needle holder | | E | anatomical forceps |
+| C | mosquito clamp | | F | surgical forceps |
 
 | Package | Contents |
 |---|---|
-| `scrubnurse_perception` | `kinect_camera` (Azure Kinect driver), `tool_detector` (YOLO segmentation → pixel position + heading), `tool_localizer` (homography → grasp pose), `compute_homography` (camera calibration from saved pairs) |
-| `scrubnurse_voice` | `voice_command` (Whisper speech → tool id; always listening for a wake word, plus push-to-talk from the dashboard) |
-| `scrubnurse_control` | `scrubnurse_controller` (task logic, MoveIt 2 motions, Robotiq gripper), `record_pose` (teach new poses) |
-| `scrubnurse_bringup` | Launch files and cell configuration: `scrubnurse.yaml`, `poses.yaml`, `sim.yaml`, UR10e and camera calibration |
-| `scrubnurse_sim` | Gazebo cell, plus the `sim_gripper`, `sim_tool_detector` and `sim_surgeon` helpers |
+| `scrubnurse_perception` | `kinect_camera` (Azure Kinect), `tool_detector` (YOLO), `tool_localizer` (homography), `compute_homography` |
+| `scrubnurse_voice` | `voice_command` (Whisper speech → tool id) |
+| `scrubnurse_control` | `scrubnurse_controller` (task logic, motions, gripper), `record_pose` |
+| `scrubnurse_dashboard` | FastAPI backend and React page |
+| `scrubnurse_interfaces` | Status messages for the dashboard |
+| `scrubnurse_bringup` | Launch files and cell configuration (`config/`) |
+| `scrubnurse_sim` | Gazebo cell, simulated gripper, detector, surgeon and cameras |
 
-```
-scrubnurse_ws/
-├── README.md
-├── requirements.txt          pip-only Python packages (installed into .venv)
-├── requirements-camera.txt   pyk4a, only on the PC with the Azure Kinect
-├── scripts/
-│   ├── setup_venv.sh         creates/updates .venv
-│   └── activate.sh           source in every terminal: ROS + .venv + workspace
-├── docs/media/               pendant and GUI screenshots
-└── src/
-    ├── scrubnurse_bringup/   launch/ and config/
-    ├── scrubnurse_control/
-    ├── scrubnurse_perception/   (models/ holds the YOLO weights)
-    ├── scrubnurse_sim/       urdf/, worlds/, models/, scripts/generate_world.py
-    └── scrubnurse_voice/
-```
+## 1. Simulation in Docker
 
-## Installation
-
-You need Ubuntu 22.04 (native or WSL 2) and about 10 GB of disk space. All steps are run once per
-machine.
-
-### 1. ROS 2 Humble
-
-If ROS 2 Humble isn't installed yet, follow the official guide:
-<https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html>. Install `ros-humble-desktop`.
-
-### 2. Tools
+Nothing to install but Docker with Compose v2 (tested on Linux). The first build downloads and
+compiles about 3.5 GB and takes a while.
 
 ```bash
-sudo apt update
-sudo apt install -y git python3-venv python3-pip python3-rosdep python3-colcon-common-extensions
-sudo rosdep init      # skip if it says it was already initialised
-rosdep update
+git clone https://github.com/jayBhagiya/scrubnurse_ws.git && cd scrubnurse_ws
+docker compose up --build
 ```
 
-### 3. Get the code and its system dependencies
+1. When the log quiets down (about a minute), open http://localhost:8080.
+2. Press **Resume**. The arm first returns tool C, which starts on the table.
+3. Click an instrument under *Request an instrument*. The arm picks it from the magazine and hands
+   it over; the simulated surgeon lays it back on the table 15 s later, and the arm returns it.
 
-```bash
-git clone https://github.com/jayBhagiya/scrubnurse_ws.git
-cd scrubnurse_ws
-source /opt/ros/humble/setup.bash
-rosdep install --from-paths src --ignore-src -y
-```
+![Dashboard with the simulation](docs/media/sim_dashboard.jpg)
 
-`rosdep` reads every `package.xml` and installs the ROS and Ubuntu packages they list. That covers
-the UR driver, MoveIt 2, `pymoveit2`, Gazebo (`ur_simulation_gz`, `ros_gz`), ros2_control,
-`vision_msgs`, PortAudio and others.
+*Camera and detection* is the simulated overhead camera with the detected tools; *Simulation* is a
+side view of the cell. Both are rendered by Gazebo inside the container, so no Gazebo window opens:
+to watch the 3D scene in Gazebo itself, use [path 2](#gazebo-simulation).
 
-### 4. Python virtual environment
+Stop with Ctrl-C (or `docker compose down`). The containers use ROS domain 42
+(`SIM_ROS_DOMAIN_ID`), so they don't disturb a robot on the same network. The dashboard is only
+reachable from this PC.
 
-```bash
-./scripts/setup_venv.sh
-```
+## 2. Simulation on your PC
 
-This creates `.venv` with the packages that only exist on PyPI: PyTorch, Ultralytics (YOLO),
-OpenAI Whisper, sounddevice and soundfile. It follows the ROS 2 guide *Using Python packages with
-ROS 2*:
+### Installation
 
-- The venv is created with `--system-site-packages`, so ROS's Python packages stay visible.
-- It contains a `COLCON_IGNORE` file, so colcon doesn't scan it.
-- **No GPU is required.** The script picks the PyTorch build from the NVIDIA driver:
+Ubuntu 22.04 (native or WSL 2), about 10 GB of disk. Once per machine; the real cell (path 3) needs
+the same installation.
 
-  | Machine | Build |
-  |---|---|
-  | RTX 50xx with driver ≥ 570.26 | CUDA 12.8 |
-  | Older NVIDIA GPU with driver ≥ 560.28 | CUDA 12.6 |
-  | Anything else | CPU |
+1. Install [ROS 2 Humble](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html)
+   (`ros-humble-desktop`) and [Node.js](https://nodejs.org) 18 or newer (Ubuntu's own `nodejs`
+   package is too old; [nvm](https://github.com/nvm-sh/nvm) works). Then:
 
-  To force a build, run `TORCH_BUILD=cpu ./scripts/setup_venv.sh` (or `cu126`, `cu128`). On CPU,
-  YOLO and Whisper still work, only more slowly. Set the voice model to `small.en` (see
-  [Configuration](#configuration)) to keep voice responsive.
-- A venv contains absolute paths, so never copy it to another machine or commit it. Run the
-  script again on each machine, and again after `requirements.txt` changes.
+   ```bash
+   sudo apt install -y git python3-venv python3-pip python3-rosdep python3-colcon-common-extensions
+   sudo rosdep init; rosdep update
+   git clone https://github.com/jayBhagiya/scrubnurse_ws.git && cd scrubnurse_ws
+   source /opt/ros/humble/setup.bash
+   rosdep install --from-paths src --ignore-src -y   # UR driver, MoveIt 2, Gazebo, ...
+   ./scripts/setup_venv.sh                           # .venv: PyTorch, YOLO, Whisper
+   (cd src/scrubnurse_dashboard/web && npm ci && npm run build)   # the dashboard page
+   ```
 
-### 5. Azure Kinect SDK (only on the PC with the camera)
+   The script picks a CUDA or CPU PyTorch build from the NVIDIA driver; force one with
+   `TORCH_BUILD=cpu|cu126|cu128`. On CPU, set the Whisper model to `small.en`. Never copy the venv
+   to another machine; rerun the script there. Rerun `npm run build` after changing the page.
 
-The camera node uses `pyk4a`, which builds against the Azure Kinect SDK. Microsoft publishes the
-SDK for Ubuntu 18.04 only, but these packages also install on 22.04:
+2. **Only on the PC with the Azure Kinect (path 3):** install the SDK (published for 18.04, works
+   on 22.04) and the udev rule, then replug the camera:
 
-```bash
-cd /tmp
-curl -sSLO https://packages.microsoft.com/ubuntu/18.04/prod/pool/main/libk/libk4a1.4/libk4a1.4_1.4.1_amd64.deb
-curl -sSLO https://packages.microsoft.com/ubuntu/18.04/prod/pool/main/libk/libk4a1.4-dev/libk4a1.4-dev_1.4.1_amd64.deb
-sudo apt install ./libk4a1.4_1.4.1_amd64.deb ./libk4a1.4-dev_1.4.1_amd64.deb   # accept the licence prompt
-# Let normal users open the camera:
-sudo curl -sSL -o /etc/udev/rules.d/99-k4a.rules \
-  https://raw.githubusercontent.com/microsoft/Azure-Kinect-Sensor-SDK/develop/scripts/99-k4a.rules
-sudo udevadm control --reload-rules && sudo udevadm trigger
-cd -
-./scripts/setup_venv.sh      # now also installs pyk4a
-```
+   ```bash
+   cd /tmp
+   curl -sSLO https://packages.microsoft.com/ubuntu/18.04/prod/pool/main/libk/libk4a1.4/libk4a1.4_1.4.1_amd64.deb
+   curl -sSLO https://packages.microsoft.com/ubuntu/18.04/prod/pool/main/libk/libk4a1.4-dev/libk4a1.4-dev_1.4.1_amd64.deb
+   sudo apt install ./libk4a1.4_1.4.1_amd64.deb ./libk4a1.4-dev_1.4.1_amd64.deb
+   sudo curl -sSL -o /etc/udev/rules.d/99-k4a.rules \
+     https://raw.githubusercontent.com/microsoft/Azure-Kinect-Sensor-SDK/develop/scripts/99-k4a.rules
+   sudo udevadm control --reload-rules && sudo udevadm trigger
+   cd - && ./scripts/setup_venv.sh                    # now also installs pyk4a
+   ```
 
-Replug the camera after installing the udev rule.
+3. Build and test. Source `scripts/activate.sh` in **every new terminal** (ROS, venv, workspace):
 
-## Build and test
+   ```bash
+   source scripts/activate.sh
+   python -m colcon build --symlink-install   # python -m: nodes run with the venv's Python
+   source scripts/activate.sh
+   colcon test && colcon test-result --verbose
+   ```
 
-In **every new terminal**, source the environment first. This works in bash and zsh, from any
-directory:
-
-```bash
-source scripts/activate.sh          # ROS 2, then .venv, then this workspace's install/
-```
-
-Then build:
-
-```bash
-python -m colcon build --symlink-install
-source scripts/activate.sh          # once after the first build, so install/ is picked up
-```
-
-Use `python -m colcon`, not plain `colcon`, when building with `--symlink-install`. That way the
-node executables run with the venv's Python. A plain `colcon build`, without symlinks, also works.
-
-Run the tests:
-
-```bash
-colcon test && colcon test-result --verbose
-```
-
-The six Whisper tests transcribe recorded tool names. They are skipped by default because they
-download a 1.5 GB model. To run them:
-`SCRUBNURSE_WHISPER_TESTS=1 colcon test --packages-select scrubnurse_voice`.
-
-## Running
-
-The controller always starts **paused**. Nothing moves until you resume it.
-
-### Mock robot (no hardware)
-
-```bash
-ros2 launch scrubnurse_bringup mock.launch.py
-# second terminal (source scripts/activate.sh first):
-ros2 service call /scrubnurse_controller/resume std_srvs/srv/Trigger
-ros2 topic pub --once /tool_request std_msgs/msg/String "{data: B}"
-```
-
-The UR10e runs on ros2_control mock hardware with MoveIt 2 and RViz, with a mock gripper and no
-camera or voice. Use it to check motion sequences after changing poses or parameters.
+   The Whisper tests download a 1.5 GB model and are skipped unless
+   `SCRUBNURSE_WHISPER_TESTS=1`.
 
 ### Gazebo simulation
 
 ```bash
-ros2 launch scrubnurse_bringup sim.launch.py      # add gazebo_gui:=false launch_rviz:=false for headless
-# second terminal:
-ros2 service call /scrubnurse_controller/resume std_srvs/srv/Trigger
-ros2 topic pub --once /tool_request std_msgs/msg/String "{data: B}"
+ros2 launch scrubnurse_bringup sim.launch.py camera:=true
 ```
 
-The simulated cell (Gazebo Fortress) contains:
+This opens Gazebo (the 3D cell) and RViz (MoveIt), and starts the dashboard. Open
+http://localhost:8080 and press **Resume**, then request instruments as in path 1.
 
-- the UR10e with a simplified Hand-E-like gripper;
-- the work table, with tool C already lying in the return area;
-- the magazine with tools A–F standing upright;
-- the surgeon's hand at the handover pose;
-- the upright return rack.
+The simulation replaces three things; the controller, localizer and motion code run unchanged:
 
-After you resume, the controller returns tool C, then serves requests. The controller, localizer
-and motion code run unchanged. The simulation replaces three things:
-
-- **Tool detection.** `sim_tool_detector` projects the true tool poses into a virtual overhead
-  camera mounted like the real one. The YOLO model is trained on real instruments and doesn't
-  recognise the simulated stand-ins.
-- **Gripper.** `sim_gripper` offers the same `GripperCommand` action as a ros2_control gripper. It
-  attaches the tool between the fingers with a Gazebo detachable joint.
-- **Surgeon.** `sim_surgeon` takes a handed-over tool at once and lays it back on the table 15 s
-  later, so the controller returns it. That runs the whole cycle: request, handover, return.
-
-The holders are placed where the recorded poses put a held tool. The world is generated from
-`poses.yaml`, so regenerate it after re-teaching poses:
-
-```bash
-cd src/scrubnurse_sim
-python3 scripts/generate_world.py ../scrubnurse_bringup/config/poses.yaml worlds/scrubnurse_cell.sdf
-```
+- **Detection:** `sim_tool_detector` projects the true tool poses into a virtual overhead camera
+  (YOLO is trained on real instruments).
+- **Gripper:** `sim_gripper` attaches the tool between the fingers.
+- **Surgeon:** `sim_surgeon` takes each handed-over tool and lays it back on the table 15 s later.
 
 Options:
 
-- `camera:=true` also spawns a rendered overhead camera on `/overhead_camera/image`, for viewing
-  only.
-- `render_engine:=ogre2` looks better on native Linux. Keep the default `ogre` under WSL, where
-  Ogre 2 crashes.
-- `voice:=true` starts the voice node. It needs a microphone.
+- `camera:=true` renders the overhead camera and the side view for the dashboard (more CPU).
+- `gazebo_gui:=false launch_rviz:=false` runs without windows.
+- `voice:=true` starts the voice node (needs a microphone).
+- `render_engine:=ogre2` looks better on native Linux; keep the default `ogre` under WSL.
 
-### Real cell
+After re-teaching poses, regenerate the world:
+`python3 src/scrubnurse_sim/scripts/generate_world.py src/scrubnurse_bringup/config/poses.yaml src/scrubnurse_sim/worlds/scrubnurse_cell.sdf`.
 
-**Once per robot (pendant):**
+### Mock robot
 
-- Install the **External Control** URCap. Set *Host IP* to the ROS PC's address on the robot
-  network and *Custom port* to 50002.
-- Install the **Robotiq Grippers** URCap. The controller talks to the gripper through its socket
-  on port 63352.
-- Create a program that contains the External Control node.
-- Give the ROS PC a static address in the robot's subnet.
+```bash
+ros2 launch scrubnurse_bringup mock.launch.py
+```
+
+The UR10e on ros2_control mock hardware with MoveIt 2 and RViz, no camera or voice. Use it to
+check motion sequences after changing poses.
+
+## 3. Real cell
+
+### Running the cell
+
+**Once per robot (pendant):** install the **External Control** URCap (*Host IP*: the ROS PC,
+*Custom port*: 50002) and the **Robotiq Grippers** URCap (socket port 63352), and create a program
+containing the External Control node. Give the ROS PC a static address in the robot's subnet. If
+the camera or table moved, [calibrate the camera](#camera-calibration) before the first run.
 
 **Every run:**
 
-1. Connect the robot LAN, the camera (USB 3) and the microphone. Power on the UR10e.
-2. On the pendant, load the External Control program and power on the arm.
+1. Connect the robot LAN, the Azure Kinect (USB 3) and the microphone. Power on the arm and load
+   the External Control program.
 
    ![Load program](docs/media/load_program.jpg)
 
-3. Start everything, then press **Play** on the pendant:
+2. Set the pendant's speed slider low (10% for a first run): it sets the arm speed. Then start
+   everything and press **Play** on the pendant:
 
    ```bash
-   ros2 launch scrubnurse_bringup real.launch.py robot_ip:=<robot ip>   # camera:=false launch_rviz:=false
+   ros2 launch scrubnurse_bringup real.launch.py robot_ip:=<robot ip>   # launch_rviz:=false
    ```
 
-   This starts the UR driver, MoveIt 2, the Azure Kinect, the detector, the localizer, the voice
-   node, the controller and the dashboard (http://localhost:8080).
-4. Check the scene: tools in the magazine, nothing in the robot's way. Then resume:
+   This starts the UR driver, MoveIt 2, the camera, detector, localizer, voice node, controller
+   and dashboard.
+3. Open http://localhost:8080. Check the scene (tools in the magazine, nothing in the way), keep a
+   hand on the emergency stop and press **Resume**.
+4. Say "robot, scalpel", or press **Push to talk** and say "scalpel".
 
-   ```bash
-   ros2 service call /scrubnurse_controller/resume std_srvs/srv/Trigger
-   ```
+**Continuous demo:** by default the controller pauses after every task (`step_mode`). For a demo
+that runs without pausing, put this in `demo.yaml` and add
+`override_params_file:=$PWD/demo.yaml` to the launch command:
 
-5. Say "robot, scalpel", or press **Push to talk** on the dashboard and say "scalpel". The
-   dashboard's voice panel shows what was heard; the microphone can be chosen there too.
+```yaml
+scrubnurse_controller:
+  ros__parameters:
+    step_mode: false
+```
 
-For a first run, keep the defaults:
+**Dashboard in Docker** (no Node.js on the robot PC): start `real.launch.py ... dashboard:=false`,
+then `COMPOSE_FILE=compose.real.yaml HOST_UID=$(id -u) docker compose up --build`.
 
-- the controller pauses after every task (`step_mode`);
-- set the pendant's speed slider to 10% before pressing **Play**: the slider is the arm speed;
-- keep a hand on the emergency stop.
+### Camera calibration
 
-### Operator control
+`tool_localizer` maps a tool's pixel position to x/y on the table (UR `base` frame) with a
+homography. It is calibrated from pairs: where the camera sees a block, and where tool0 is when a
+pointer in the gripper touches the block's centre. Recalibrate whenever the camera or the table
+moves.
 
-The ROS 1 controller asked for Enter or `y` at the keyboard. In this port:
+**You need:**
 
-| Action | Command |
+- **Calibration block:** 40 × 40 × 10 mm, printed in **matte black**:
+  [`calibration_block.stl`](docs/calibration/calibration_block.stl) (source
+  [`.scad`](docs/calibration/calibration_block.scad)). A shallow cone in the top centre guides the
+  pointer tip. The camera finds it as a dark square, so calibrate on the light table surface. Any
+  dark 40 mm square object works too (for example a black PC fan).
+- **Pointer:** anything with a sharp tip that the gripper holds vertically and centred between
+  the fingers, such as a 3D-printed rod with a screwdriver-like tip or a real screwdriver. Its
+  length doesn't matter (only x/y are used), but the tip must be on the tool0 axis: rotate the
+  wrist 180° above a mark, and the tip should stay on the mark.
+
+**Steps:**
+
+1. Start the cell with `real.launch.py` (the controller stays paused). Close the gripper on the
+   pointer. To jog with the pendant, stop the External Control program; the driver keeps
+   publishing the arm position.
+2. On the dashboard, open **Calibration**.
+3. Put the block on the table and move the arm out of the camera view. When the block is outlined
+   in green, click **Select pixel position** (the centre is averaged over one second).
+4. Jog the pointer onto the block's centre: first in x/y above it, then down until the tip almost
+   touches the cone, then correct x/y. Don't move the block. Click **Select reference position**.
+5. Repeat for 20 or more positions spread over the whole return area, corners included.
+6. Check the errors. *Unseen* is each pair against a fit made without it: how well the matrix
+   predicts new positions. Remove pairs with an unseen error well above the rest (usually a
+   mis-pointed tip) and record them again.
+7. Click **Save pairs and homography** (written to `~/scrubnurse_calibration`). Copy the
+   `homography` line into the `tool_localizer` section of `config/scrubnurse.yaml` and restart.
+
+Saved pairs can be loaded again to add points later, or refitted on the command line:
+`ros2 run scrubnurse_perception compute_homography pairs.csv -o homography.yaml`.
+
+### Robot poses
+
+The 38 magazine, handover, return and rest poses are in `config/poses.yaml`. To re-teach one, jog
+the robot and run `ros2 run scrubnurse_control record_pose -o new_poses.yaml` (press Enter, name
+the pose, e.g. `PA`). Merge the entries into `poses.yaml`, check with `mock.launch.py` and
+regenerate the Gazebo world.
+
+**A different UR10e:** extract its factory calibration and pass it to the launch:
+
+```bash
+ros2 launch ur_calibration calibration_correction.launch.py robot_ip:=<ip> target_filename:=$PWD/my_robot.yaml
+ros2 launch scrubnurse_bringup real.launch.py robot_ip:=<ip> kinematics_params_file:=$PWD/my_robot.yaml
+```
+
+Cell coordinates (`poses.yaml`, the homography, `return_area`) are in the UR **`base`** frame, as
+shown on the pendant; ROS 2's `base_link` is rotated 180° about z from it.
+
+## Operating the cell
+
+The controller always starts **paused**: nothing moves until you press **Resume**.
+
+| Dashboard | Does |
 |---|---|
-| Start, or continue after a pause | `ros2 service call /scrubnurse_controller/resume std_srvs/srv/Trigger` |
-| Pause after the current task | `ros2 service call /scrubnurse_controller/pause std_srvs/srv/Trigger` |
-| Request a tool without voice | `ros2 topic pub --once /tool_request std_msgs/msg/String "{data: D}"` |
-| Watch the state | `ros2 topic echo /scrubnurse_controller/status` |
-| Stop the arm now | Ctrl-C in the launch terminal (cancels the trajectory), or the emergency stop |
+| **Resume / Pause** | Start or continue; pause after the current task |
+| **Abort** | Stop the arm now and clear the request queue |
+| **Recover** | After an abort, move to the rest pose, then pause (confirm the arm is clear) |
+| Instrument buttons | Request a tool without voice |
+| **Push to talk / Mute**, Microphone | Voice input; the microphone switches live |
+| Camera | Switch Azure Kinect (warns when it isn't the calibrated one) |
 
-With `step_mode: true` (the default) the controller pauses again after every task. After any
-failure it pauses and reports the reason on its status topic.
+The same from a terminal: `ros2 service call /scrubnurse_controller/resume std_srvs/srv/Trigger`
+(`/pause`, `/abort`, `/recover`), and `ros2 topic pub --once /tool_request std_msgs/msg/String
+"{data: D}"`. Ctrl-C in the launch terminal cancels the trajectory and stops the arm.
 
 ## Configuration
 
-All cell parameters are in `src/scrubnurse_bringup/config/`. With `--symlink-install`, edits take
-effect on the next launch, without a rebuild.
+All parameters are in `src/scrubnurse_bringup/config/scrubnurse.yaml` (`sim.yaml` overrides it in
+Gazebo). With `--symlink-install`, edits apply on the next launch without a rebuild.
 
-| File | Contents |
-|---|---|
-| `scrubnurse.yaml` | Parameters of all nodes on the real cell |
-| `sim.yaml` | Overrides for Gazebo, loaded after `scrubnurse.yaml` |
-| `poses.yaml` | 38 named `tool0` poses: magazine, handover, return rack, home |
-| `ur10e_calibration.yaml` | Example UR10e factory kinematics; extract your own (below) |
-| `azure_kinect_rgb_1080P.yaml` | Example Azure Kinect intrinsics; replace with your camera's |
-
-Parameters you are most likely to change:
-
-| Node | Parameter | Default | Meaning |
-|---|---|---|---|
-| `scrubnurse_controller` | `velocity_scaling` | 1.0 | Arm speed (0–1); on the real cell leave it at 1.0 and use the pendant slider |
-| | `start_paused`, `step_mode` | true | Wait for `~/resume` at start / after every task |
-| | `motion_timeout` | 10.0 | Cancel a motion running this much longer than planned (s) |
-| | `gripper.host`, `gripper.port` | `robot_ip`, 63352 | Robotiq URCap socket |
-| | `return_area` | x −0.18..0.22, y −1.20..−0.75 | Table area whose tools are returned |
-| `tool_detector` | `device` | cuda:0 | `cpu` if there is no GPU (also falls back automatically) |
-| | `confidence_threshold` | 0.5 | Minimum YOLO score |
-| | `roi_polygon` | table area | Pixels of the work area; `use_roi: false` to disable |
-| `tool_localizer` | `homography` | 2024-11-22 calibration | Pixel → robot matrix (see [Calibration](#calibration)) |
-| `voice_command` | `model` | medium.en | Whisper model; `small.en` or `base.en` on CPU |
-| | `record_seconds` | 5.0 | Length of one recording |
-| | `input_device` | "" (default) | Microphone name or index; list them with `.venv/bin/python -m sounddevice` |
-| `kinect_camera` | `serial` | overhead camera | Camera to open; "" only works with a single Azure Kinect connected |
-
-**Using a different robot:** extract its factory calibration and point `real.launch.py` at it:
-
-```bash
-ros2 launch ur_calibration calibration_correction.launch.py robot_ip:=<ip> target_filename:=$PWD/my_robot_calibration.yaml
-ros2 launch scrubnurse_bringup real.launch.py robot_ip:=<ip> kinematics_params_file:=$PWD/my_robot_calibration.yaml
-```
-
-**Coordinate frame:** cell coordinates (`poses.yaml`, the homography, `return_area`) are in the
-UR **`base`** frame, the frame shown on the teach pendant. ROS 2's `base_link` is rotated 180°
-about z from it.
-
-## Calibration
-
-Recalibrate when the camera moves or the cell is rebuilt.
-
-**Camera → table homography:** on the dashboard's **Calibration** page, with a 40 × 40 × 10 mm
-black block and a pointer in the gripper. See [docs/calibration](docs/calibration/README.md) for
-the block's CAD file and the steps.
-
-Pairs files are kept in `src/scrubnurse_perception/test/data/`; the current matrix in
-`scrubnurse.yaml` comes from the 2026-11-03 pairs.
-
-**Robot poses (magazine, handover, return rack, home).**
-
-1. Record poses:
-
-   ```bash
-   ros2 run scrubnurse_control record_pose -o new_poses.yaml
-   ```
-
-   Jog the robot, press Enter, and name the pose (for example `PA`).
-2. Merge the entries into `poses.yaml`.
-3. Check the sequences with `mock.launch.py`.
-4. Regenerate the Gazebo world.
+| Node | Parameter | Meaning |
+|---|---|---|
+| `scrubnurse_controller` | `start_paused`, `step_mode` | Wait for Resume at start / after every task (both `true`) |
+| | `velocity_scaling` | Arm speed 0–1; leave 1.0 on the real cell and use the pendant slider |
+| | `motion_timeout` | Cancel a motion running this much longer than planned (s) |
+| | `return_area` | Table area whose tools are returned |
+| `tool_detector` | `device`, `confidence_threshold`, `roi_polygon` | `cpu` without GPU; minimum YOLO score; work-area pixels |
+| `tool_localizer` | `homography` | Pixel → robot matrix (see [Camera calibration](#camera-calibration)) |
+| `voice_command` | `model` | Whisper model; `small.en` on CPU |
+| | `input_device` | Microphone name substring (ALSA numbers change between boots) |
+| | `wake_words`, `tool_names` | What the voice node listens for |
+| `kinect_camera` | `serial` | The overhead Azure Kinect; "" only with a single camera connected |
+| `scrubnurse_dashboard` | `calibration_block_px`, `calibration_roi`, `calibration_dir` | Block size in pixels, search area, save folder |
 
 ## Interfaces
 
 | Name | Type | Between |
 |---|---|---|
-| `/od_camera/stream/rgb`, `/od_camera/stream/depth`, `/od_camera/camera_info` | `sensor_msgs/Image`, `CameraInfo` | `kinect_camera` → `tool_detector` |
-| `/tool_detections_2d` | `vision_msgs/Detection2DArray` | `tool_detector` → `tool_localizer`. Pixels; tool heading in `bbox.center.theta` |
-| `/tool_detections` | `vision_msgs/Detection3DArray` | `tool_localizer` → controller. Grasp poses in `base`; TF frames `tool_<id>_<n>` |
-| `/tool_detector/annotated_image` | `sensor_msgs/Image` | Detections drawn on the camera image (view with `rqt_image_view`) |
-| `/tool_request` | `std_msgs/String` | `voice_command` → controller. Tool id, for example `B` |
-| `/voice_command/transcript` | `std_msgs/String` | Every Whisper transcript |
-| `/voice_command/listen` | `std_srvs/Trigger` | Push-to-talk: with `live` the next phrase needs no wake word, otherwise records `record_seconds` |
-| `/voice_command/status` | `scrubnurse_interfaces/VoiceStatus` (latched) | Listening, muted, microphone in use and the available ones. Parameters `muted` and `input_device` change at runtime |
-| `/kinect_camera/status` | `scrubnurse_interfaces/CameraStatus` (latched) | Which Azure Kinect streams; set the parameter `serial` to switch |
+| `/od_camera/stream/rgb`, `/od_camera/camera_info` | `Image`, `CameraInfo` | `kinect_camera` → `tool_detector` |
+| `/tool_detections_2d` | `vision_msgs/Detection2DArray` | `tool_detector` → `tool_localizer` (pixels, heading in `bbox.center.theta`) |
+| `/tool_detections` | `vision_msgs/Detection3DArray` | `tool_localizer` → controller (grasp poses in `base`) |
+| `/tool_request` | `std_msgs/String` | voice / dashboard → controller (tool id, e.g. `B`) |
 | `/scrubnurse_controller/status` | `std_msgs/String` (latched) | Controller state |
-| `/scrubnurse_controller/resume`, `/pause` | `std_srvs/Trigger` | Operator control |
+| `/scrubnurse_controller/cycle` | `scrubnurse_interfaces/CycleStatus` (latched) | Current task and queue, for the dashboard |
+| `/scrubnurse_controller/resume`, `/pause`, `/abort`, `/recover` | `std_srvs/Trigger` | Operator control |
+| `/voice_command/transcript`, `/voice_command/listen` | `String`, `Trigger` | Every transcript; push-to-talk |
+| `/voice_command/events` | `scrubnurse_interfaces/VoiceEvent` | Heard phrases and their outcome, for the dashboard |
+| `/voice_command/status` | `scrubnurse_interfaces/VoiceStatus` (latched) | Listening, muted, microphones |
+| `/kinect_camera/status` | `scrubnurse_interfaces/CameraStatus` (latched) | Streaming camera and connected ones |
+| `/overhead_camera/image`, `/scene_camera/image` | `Image` | Simulation only: overhead camera, side view for the dashboard |
 
 ## Troubleshooting
 
-| Symptom | Cause and fix |
+| Symptom | Fix |
 |---|---|
-| `ros2: command not found`, or packages not found | Run `source scripts/activate.sh` in this terminal. |
-| `No venv yet` when sourcing | Run `./scripts/setup_venv.sh`. |
-| Nothing moves after launch | The controller starts paused. Call `~/resume` (see [Operator control](#operator-control)). |
-| `Cannot plan because no joint states were received` | The robot controllers aren't running. Check the launch log for failed `spawner` processes. On a real robot, press Play on the pendant. |
-| Gazebo spawners time out (`Failed getting a result from calling /controller_manager/load_controller`) | Usually the rendered camera starting at the same time. Launch without `camera:=true`. |
-| Gazebo crashes with an `Ogre::UnimplementedException` under WSL | Keep `render_engine:=ogre` (the default). |
-| Two people on the same network see each other's robots | Give each one their own ROS domain: `export ROS_DOMAIN_ID=<0..101>` before launching. |
-| Strange behaviour after a crashed launch | Leftover nodes may still run. Check with `ps aux \| grep -E "move_group\|ros2_control_node\|scrubnurse"` and end them. |
-| YOLO or Whisper is slow | Check `.venv/bin/python -c "import torch; print(torch.cuda.is_available())"`. If False on a GPU machine, update the NVIDIA driver and rerun `./scripts/setup_venv.sh`. |
-| `numpy` / `cv_bridge` import errors after installing extra pip packages | Humble needs NumPy 1.x. Rerun `./scripts/setup_venv.sh` to restore the pinned versions. |
-| Gripper activation fails on the real robot | Check that the Robotiq Grippers URCap is installed and that `gripper.host` is the robot IP. |
-| `kinect_camera` fails with `no Azure Kinect connected` | Check the USB 3 connection and the udev rule, and run `k4aviewer` if you have it. With several cameras connected, `serial` must name the overhead one (the node lists the connected serials). |
-
-## Behaviour changes compared with ROS 1
-
-- **Messages:** JSON-in-`std_msgs/String` topics were replaced by `vision_msgs` detections. The
-  separate database node is gone; the controller reads `/tool_detections` directly.
-- **Partial paths:** a straight-line path only runs if at least 95% of it could be planned. ROS 1
-  executed partial paths. ROS 1 relied on that for the magazine → PP move, which crosses the wrist
-  singularity, so the handover now reaches H and PP with joint moves.
-- **Speed:** on the real cell the pendant's speed slider sets the arm speed (`velocity_scaling` is
-  1.0); in Gazebo `velocity_scaling` does (0.5). On Humble, MoveIt returns straight-line paths timed at full speed, so the controller
-  retimes them to `velocity_scaling` before executing.
-- **Stale detections:** a detection is only used if it is less than 1 s old and the image was taken
-  after the arm stopped moving. ROS 1 kept re-publishing the last detection forever.
-- **Return area:** a tool outside the return area no longer blocks the tools that are inside it.
-- **Rest pose:** the arm moves to HD at startup (`home_pose`) and every task starts and ends
-  there. A handover goes HD → H → magazine; a return goes HD → above the tool. ROS 1 started
-  each task from wherever the arm was.
-- **Timeouts:** gripper waits and arm motions time out (`motion_timeout`) instead of hanging. The
-  UR MoveIt configuration disables MoveIt's own execution monitoring.
-- **Stopping:** Ctrl-C (or SIGTERM from `ros2 launch`) cancels the running trajectory, so the arm
-  stops, and then the controller exits.
-- **Keyboard prompts** became the `~/resume` and `~/pause` services, plus `step_mode`.
-- **Whisper** loads once at startup instead of on every recording. A sentence such as "the scalpel
-  please" now also matches.
-
-## Status
-
-- [x] All Scrubnurse packages ported, with unit tests against the ROS 1 behaviour
-- [x] Mock-hardware and Gazebo launches. The full cycle (request, handover, return) runs in Gazebo.
-- [ ] First run on the real cell. The Azure Kinect driver, the Robotiq socket gripper and the
-      calibration tool haven't run on hardware yet.
-- [ ] License: all packages say `TODO`.
+| Dashboard page is empty (`{"detail":"Not Found"}`) | The page isn't built: `cd src/scrubnurse_dashboard/web && npm ci && npm run build`, then rebuild with colcon. |
+| `ros2: command not found` or packages not found | `source scripts/activate.sh` in this terminal (`./scripts/setup_venv.sh` first if there is no venv). |
+| Nothing moves after launch | The controller starts paused: press **Resume**. |
+| No camera images or *Simulation* panel in the simulation | Start `sim.launch.py` with `camera:=true`; the cameras start once the arm controllers are up. |
+| `Cannot plan because no joint states were received` | The robot controllers aren't running: press Play on the pendant, check the log for failed spawners. |
+| Gazebo crashes with `Ogre::UnimplementedException` (WSL) | Keep `render_engine:=ogre`. |
+| Two people's robots interfere on one network | Give each one a ROS domain: `export ROS_DOMAIN_ID=<0..101>`. |
+| YOLO or Whisper is slow | `.venv/bin/python -c "import torch; print(torch.cuda.is_available())"`; if False on a GPU machine, update the driver and rerun `setup_venv.sh`. |
+| `numpy` / `cv_bridge` errors after extra pip installs | Humble needs NumPy 1.x: rerun `./scripts/setup_venv.sh`. |
+| Gripper activation fails | Check the Robotiq Grippers URCap and that `gripper.host` is the robot IP. |
+| `kinect_camera`: no Azure Kinect / wrong camera | Check USB 3 and the udev rule. With several cameras, `serial` must name the overhead one; the node lists the connected serials. |
+| Voice panel hears nothing | Pick the microphone on the dashboard, and check that it isn't muted in the system mixer. |

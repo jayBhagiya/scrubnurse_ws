@@ -49,6 +49,9 @@ class FakeNode:
     def jpeg(self):
         return None
 
+    def scene_jpeg(self):
+        return None
+
     def block_now(self):
         return {'u': self.block[0], 'v': self.block[1], 'corners': []}
 

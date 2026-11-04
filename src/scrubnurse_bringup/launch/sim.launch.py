@@ -43,6 +43,7 @@ def generate_launch_description():
         f'/world/{WORLD}/dynamic_pose/info@tf2_msgs/msg/TFMessage[ignition.msgs.Pose_V',
         '/overhead_camera/image@sensor_msgs/msg/Image[ignition.msgs.Image',
         '/overhead_camera/camera_info@sensor_msgs/msg/CameraInfo[ignition.msgs.CameraInfo',
+        '/scene_camera/image@sensor_msgs/msg/Image[ignition.msgs.Image',
     ] + [f'/scrubnurse_sim/{tool}/{action}@std_msgs/msg/Empty]ignition.msgs.Empty'
          for tool in TOOLS for action in ('attach', 'detach')]
     tool_poses = (f'/world/{WORLD}/dynamic_pose/info', '/scrubnurse_sim/tool_poses')
@@ -54,6 +55,12 @@ def generate_launch_description():
             [FindPackageShare('scrubnurse_sim'), 'models', 'overhead_camera.sdf']),
             # create ignores the model's own <pose>: without these it lands at the origin.
             '-x', '-0.016', '-y', '1.0', '-z', '0.671', '-P', '1.5707963', '-Y', '3.14159265'])
+    # After the overhead camera, which loads the Sensors system this one also uses.
+    scene_camera_spawner = Node(
+        package='ros_gz_sim', executable='create', output='screen',
+        arguments=['-name', 'scene_camera', '-file', PathJoinSubstitution(
+            [FindPackageShare('scrubnurse_sim'), 'models', 'scene_camera.sdf']),
+            '-x', '-1.8', '-y', '2.4', '-z', '1.5', '-P', '0.394', '-Y', '-0.7086'])
 
     return LaunchDescription([
         DeclareLaunchArgument('world', default_value=f'{WORLD}.sdf',
@@ -65,7 +72,7 @@ def generate_launch_description():
         DeclareLaunchArgument('voice', default_value='false',
                               description='Start the voice command node (needs a microphone)'),
         DeclareLaunchArgument('camera', default_value='false',
-                              description='Spawn the overhead camera (only for viewing)'),
+                              description='Spawn the overhead camera and the side view for the dashboard'),
         IncludeLaunchDescription(
             launch_file('ur_simulation_gz', 'ur_sim_control.launch.py'),
             launch_arguments={
@@ -90,6 +97,9 @@ def generate_launch_description():
         finger_spawner,
         RegisterEventHandler(OnProcessExit(target_action=finger_spawner,
                                            on_exit=[camera_spawner]),
+                             condition=IfCondition(arg('camera'))),
+        RegisterEventHandler(OnProcessExit(target_action=camera_spawner,
+                                           on_exit=[scene_camera_spawner]),
                              condition=IfCondition(arg('camera'))),
         Node(package='ros_gz_bridge', executable='parameter_bridge', name='scrubnurse_sim_bridge',
              arguments=bridged, remappings=[tool_poses], parameters=[sim_time]),

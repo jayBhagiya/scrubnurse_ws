@@ -80,6 +80,14 @@ export default function App() {
           <div className="column">
             <CameraPanel health={state.health} detections={state.detections} streamKey={connections}
               camera={state.camera_status} />
+            {state.mode === 'sim' && !state.health.topics.camera.stale && (  // both sim cameras need camera:=true
+              <section>
+                <h2>Simulation</h2>
+                <div className="camera">
+                  <img key={connections} src="/stream/scene" alt="Side view of the simulated cell" />
+                </div>
+              </section>
+            )}
           </div>
           <ArmPanel arm={state.arm} health={state.health} />
           <EventLog events={state.events} />
