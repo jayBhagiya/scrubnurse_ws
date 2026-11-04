@@ -61,7 +61,7 @@ class DashboardNode(Node):
 
     def __init__(self):
         super().__init__('scrubnurse_dashboard')
-        self.mode = self.declare_parameter('mode', 'real').value  # 'sim' or 'real', for the badge
+        self.mode = self.declare_parameter('mode', 'real').value  # real, sim, mock or replay
         self.host = self.declare_parameter('host', '127.0.0.1').value
         self.port = self.declare_parameter('port', 8080).value
         self._call_timeout = self.declare_parameter('service_timeout', 3.0).value
@@ -241,6 +241,8 @@ class DashboardNode(Node):
         return self._health
 
     def refusal(self, action):
+        if self.mode == 'replay':
+            return 'replay: the controls are off'
         with self._lock:
             cycle = self._cycle
         return state.refusal(action, cycle, self._health.get('controller', False))

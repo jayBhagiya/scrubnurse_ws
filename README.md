@@ -37,6 +37,7 @@ All three use the same dashboard at http://localhost:8080 ([Operating the cell](
   - [Camera calibration](#camera-calibration)
   - [Robot poses](#robot-poses)
 - [Operating the cell](#operating-the-cell)
+- [Recording and replay](#recording-and-replay)
 - [Configuration](#configuration)
 - [Interfaces](#interfaces)
 - [Troubleshooting](#troubleshooting)
@@ -307,6 +308,36 @@ The controller always starts **paused**: nothing moves until you press **Resume*
 The same from a terminal: `ros2 service call /scrubnurse_controller/resume std_srvs/srv/Trigger`
 (`/pause`, `/abort`, `/recover`), and `ros2 topic pub --once /tool_request std_msgs/msg/String
 "{data: D}"`. Ctrl-C in the launch terminal cancels the trajectory and stops the arm.
+
+## Recording and replay
+
+Add `record:=true` to `real.launch.py` or `sim.launch.py` to save the run to
+`~/scrubnurse_runs/<date_time>/` (MCAP; `record_dir:=` for another folder). It holds the
+controller status, detections, voice, arm joints and the camera as JPEG (several MB/s on the
+real cell at 30 fps: check the free disk space).
+
+Per-cycle times and failures of a run, also written to `cycles.csv` in the run folder:
+
+```bash
+ros2 run scrubnurse_dashboard metrics ~/scrubnurse_runs/<date_time>
+```
+```
+cycle  kind      tool                 start s  seconds  result
+    1  handover  scalpel                 22.4     15.3  ok
+    2  return    scalpel                 48.1     37.4  ok
+handover: 1 of 1 ok, mean 15.3 s, slowest 15.3 s
+return: 1 of 1 ok, mean 37.4 s, slowest 37.4 s
+```
+
+Watch a run again on the dashboard (http://localhost:8080, badge **REPLAY**, controls off):
+
+```bash
+ros2 launch scrubnurse_bringup replay.launch.py run:=$HOME/scrubnurse_runs/<date_time>
+```
+
+Nothing moves during a replay: it runs on its own ROS domain (99) on this PC only, and the
+recorded instrument requests are played as `/replayed/tool_request`, so a running cell never
+receives them. Stop the cell's dashboard first, or pass `dashboard_port:=8081`.
 
 ## Configuration
 

@@ -11,6 +11,8 @@
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>rosbag2_py</exec_depend>
+  <exec_depend>rosbag2_storage_mcap</exec_depend>
   <exec_depend>scrubnurse_interfaces</exec_depend>
   <exec_depend>scrubnurse_perception</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>

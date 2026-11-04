@@ -3,10 +3,16 @@ Scrubnurse application nodes: tool perception, voice commands, the task controll
 
 Expects the robot side (UR driver or simulation, plus MoveIt 2) and a camera
 image topic to be up; real.launch.py, mock.launch.py and sim.launch.py include this file.
+
+record:=true saves the run to <record_dir>/<date_time>/ (MCAP, camera as JPEG) for
+`ros2 run scrubnurse_dashboard metrics` and replay.launch.py.
 """
 
+import os
+import time
+
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, ExecuteProcess
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -36,6 +42,16 @@ ARGUMENTS = [
     ('dashboard_host', '127.0.0.1',
      'Dashboard address; 0.0.0.0 makes it reachable from the network (no login)'),
     ('dashboard_port', '8080', 'Dashboard port'),
+    ('record', 'false', 'Record the run (see record_dir)'),
+    ('record_dir', os.path.expanduser('~/scrubnurse_runs'), 'Folder for the recorded runs'),
+]
+
+RECORDED_CAMERA = '/recording/camera'  # replay.launch.py plays it back from here
+RECORDED_TOPICS = [
+    '/scrubnurse_controller/cycle', '/scrubnurse_controller/status', '/tool_request',
+    '/tool_detections_2d', '/tool_detections', '/voice_command/events', '/voice_command/status',
+    '/voice_command/transcript', '/kinect_camera/status', '/joint_states', '/tf', '/tf_static',
+    RECORDED_CAMERA + '/compressed',
 ]
 
 
@@ -69,4 +85,15 @@ def generate_launch_description():
                  'gripper.backend': arg('gripper_backend'),
                  'gripper.host': ParameterValue(arg('robot_ip'), value_type=str),
              }]),
+        # Raw camera images would fill about 180 MB/s at 30 fps; record them as JPEG.
+        Node(package='image_transport', executable='republish', arguments=['raw', 'compressed'],
+             parameters=[{'out.jpeg_quality': 80}],
+             remappings=[('in', arg('image_topic')),
+                         ('out/compressed', RECORDED_CAMERA + '/compressed')],
+             condition=IfCondition(arg('record'))),
+        ExecuteProcess(
+            cmd=['ros2', 'bag', 'record', '-s', 'mcap', '-o',
+                 PathJoinSubstitution([arg('record_dir'), time.strftime('%Y-%m-%d_%H-%M-%S')]),
+                 *RECORDED_TOPICS],
+            output='screen', condition=IfCondition(arg('record'))),
     ])

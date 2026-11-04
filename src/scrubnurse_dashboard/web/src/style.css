@@ -63,6 +63,7 @@ p { margin: 6px 0; }
 .badge { font-weight: 700; font-size: 0.8rem; padding: 3px 10px; border-radius: 4px; color: #fff; background: var(--muted); }
 .badge.mode-real { background: var(--alert); }
 .badge.mode-sim { background: var(--accent); }
+.badge.mode-replay { background: var(--warn); }
 
 .light, .tag {
   font-size: 0.8rem; padding: 2px 8px; border-radius: 10px; border: 1px solid transparent; white-space: nowrap;

@@ -33,6 +33,7 @@ setup(
     entry_points={
         'console_scripts': [
             'dashboard = scrubnurse_dashboard.dashboard_node:main',
+            'metrics = scrubnurse_dashboard.metrics:main',
         ],
     },
 )
