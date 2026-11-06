@@ -20,15 +20,21 @@ TOPIC = '/scrubnurse_controller/cycle'
 COLUMNS = ['cycle', 'kind', 'tool', 'start', 'seconds', 'result']
 
 
-def read_statuses(run):
-    """Yield (receive time in s, CycleStatus) from the run's recording."""
+def read_messages(run, types):
+    """Yield (receive time in s, topic, message) of the topics in `types` (topic -> class)."""
     reader = rosbag2_py.SequentialReader()
     reader.open(rosbag2_py.StorageOptions(uri=run, storage_id='mcap'),
                 rosbag2_py.ConverterOptions('', ''))
-    reader.set_filter(rosbag2_py.StorageFilter(topics=[TOPIC]))
+    reader.set_filter(rosbag2_py.StorageFilter(topics=list(types)))
     while reader.has_next():
-        _, data, stamp = reader.read_next()
-        yield stamp / 1e9, deserialize_message(data, CycleStatus)
+        topic, data, stamp = reader.read_next()
+        yield stamp / 1e9, topic, deserialize_message(data, types[topic])
+
+
+def read_statuses(run):
+    """Yield (receive time in s, CycleStatus) from the run's recording."""
+    for t, _, msg in read_messages(run, {TOPIC: CycleStatus}):
+        yield t, msg
 
 
 def cycles(statuses):

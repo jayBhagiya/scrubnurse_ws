@@ -144,3 +144,18 @@ select { font: inherit; padding: 7px; border-radius: 6px; border: 1px solid var(
   vertical-align: -1px; border: 1px solid #000; }
 .device-choice { margin: 8px 0; font-size: 0.9rem; }
 .device-choice select { margin-left: 4px; max-width: 100%; }
+
+.timeline { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; }
+.timeline .buttons { align-items: center; }
+.timeline .clock { font-variant-numeric: tabular-nums; font-weight: 600; }
+.timeline input[type='range'] { width: 100%; accent-color: var(--warn); }
+.track { position: relative; height: 24px; }
+.track .mark {
+  position: absolute; top: 0; height: 24px; min-width: 24px; padding: 0 4px; font-size: 0.75rem;
+  border-radius: 4px; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+}
+.track .mark.ok { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.track .mark.alert { background: var(--alert-bg); color: var(--alert); border-color: var(--alert); }
+button.time.link {
+  padding: 0; border: none; background: none; color: var(--accent); text-decoration: underline;
+}

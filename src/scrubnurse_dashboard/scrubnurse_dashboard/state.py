@@ -37,6 +37,26 @@ def refusal(action, cycle, controller_up):
     return None
 
 
+def cycle_dict(msg, names):
+    """Turn a CycleStatus into the dict the page shows; `names` maps tool id -> name."""
+    cycle = {name: getattr(msg, name) for name in (
+        'cycle_id', 'kind', 'tool_id', 'tool_name', 'phase', 'description', 'step',
+        'step_count', 'paused', 'aborted', 'error')}
+    cycle['queue'] = [{'tool_id': t, 'tool_name': names.get(t, '')} for t in msg.queue]
+    return cycle
+
+
+def cycle_level(cycle):
+    """Event log level of a cycle status."""
+    return 'error' if cycle['error'] else 'warn' if cycle['aborted'] else 'info'
+
+
+def voice_dict(msg, t):
+    """Turn a VoiceEvent received at time `t` (s) into the dict the page shows."""
+    return {'time': t, 'kind': msg.kind, 'text': msg.text, 'wake_word': msg.wake_word,
+            'tool_id': msg.tool_id, 'tool_name': msg.tool_name}
+
+
 def freshness(received, now, stale_after):
     """Age of a streaming topic and whether it is stale; `received` is None before any."""
     if received is None:

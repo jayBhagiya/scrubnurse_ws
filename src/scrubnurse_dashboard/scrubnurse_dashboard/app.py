@@ -2,6 +2,7 @@
 HTTP side of the dashboard: REST controls, the state WebSocket and the camera stream.
 
 `node` is the DashboardNode (or a stand-in in the tests) and provides snapshot(),
+replay(action, value) for the replay timeline,
 health(), refusal(action), call(action), request_tool(tool_id), jpeg(), log() and
 tool_names; scene_jpeg() for the simulation's side view; for voice and camera voice_status(),
 camera_status(), voice_listen() and set_parameter(node, name, value); for the calibration page
@@ -11,6 +12,7 @@ also `calibration`
 
 import asyncio
 import os
+import time
 
 from fastapi import Body, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
@@ -123,6 +125,22 @@ def create_app(node, web_dir=None):
         return node_call('camera', f'switch to {serial}', lambda: node.set_parameter(
             '/kinect_camera', 'serial', serial, timeout=15.0))  # reopening takes a few seconds
 
+    @app.post('/api/replay/pause')
+    def replay_pause():
+        return node_call('replay', 'pause', lambda: node.replay('pause'))
+
+    @app.post('/api/replay/resume')
+    def replay_resume():
+        return node_call('replay', 'play', lambda: node.replay('resume'))
+
+    @app.post('/api/replay/seek')
+    def replay_seek(time: float = Body(..., embed=True, ge=0)):
+        return node_call('replay', f'jump to {time:.1f} s', lambda: node.replay('seek', time))
+
+    @app.post('/api/replay/rate')
+    def replay_rate(rate: float = Body(..., embed=True, gt=0, le=10)):
+        return node_call('replay', f'speed {rate:g}x', lambda: node.replay('set_rate', rate))
+
     def calibration_step(action, step):
         try:
             step()
@@ -183,11 +201,13 @@ def create_app(node, web_dir=None):
 
     def stream(newest_jpeg):
         async def frames():
-            last = None
+            last, sent = None, 0.0
             while True:
                 jpeg = await asyncio.to_thread(newest_jpeg)  # encodes the newest frame once
-                if jpeg is not None and jpeg is not last:
-                    last = jpeg
+                # Repeat an unchanged frame now and then: browsers show a frame only once the
+                # next one starts, so a paused replay would otherwise stay black.
+                if jpeg is not None and (jpeg is not last or time.monotonic() - sent > 1.0):
+                    last, sent = jpeg, time.monotonic()
                     yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n')
                 await asyncio.sleep(STREAM_PERIOD)
         return StreamingResponse(frames(), media_type='multipart/x-mixed-replace; boundary=frame')

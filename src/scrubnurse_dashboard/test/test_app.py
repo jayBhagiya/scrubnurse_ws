@@ -76,6 +76,10 @@ class FakeNode:
         self.calls.append('listen')
         return True, 'say the command within 5 s'
 
+    def replay(self, action, value=None):
+        self.calls.append((action, value))
+        return self.answer
+
     def set_parameter(self, node, name, value, timeout=None):
         if self.parameter_answer is None:
             raise TimeoutError(f'no answer from {node}')
@@ -207,3 +211,14 @@ def test_camera_switch(client, node):
     assert client.post('/api/camera', json={'serial': '000848193812'}).status_code == 504
     node.camera = None
     assert client.post('/api/camera', json={'serial': '000848193812'}).status_code == 409
+
+
+def test_replay_controls(client, node):
+    assert client.post('/api/replay/pause').status_code == 200
+    assert client.post('/api/replay/seek', json={'time': 12.5}).status_code == 200
+    assert client.post('/api/replay/rate', json={'rate': 2}).status_code == 200
+    assert client.post('/api/replay/rate', json={'rate': 0}).status_code == 422
+    assert client.post('/api/replay/seek', json={'time': -1}).status_code == 422
+    assert node.calls == [('pause', None), ('seek', 12.5), ('set_rate', 2.0)]
+    node.answer = (False, 'seek refused')
+    assert client.post('/api/replay/seek', json={'time': 999}).status_code == 409

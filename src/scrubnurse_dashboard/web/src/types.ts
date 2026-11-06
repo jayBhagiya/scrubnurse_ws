@@ -71,6 +71,24 @@ export interface LogEvent {
   text: string
 }
 
+export interface CycleRow {  // one handover or return of a recorded run (metrics.py)
+  cycle: number
+  kind: 'handover' | 'return'
+  tool: string
+  start: number           // s from the start of the run
+  seconds: number | null  // null: unfinished
+  result: string          // 'ok', 'aborted', 'unfinished' or 'failed: …'
+}
+
+export interface Replay {
+  start: number     // s since the epoch, as the event times
+  duration: number  // s
+  time: number      // s from the start
+  paused: boolean
+  rate: number
+  cycles: CycleRow[]
+}
+
 export interface State {
   mode: string
   health: Health
@@ -83,6 +101,7 @@ export interface State {
   camera_status: CameraStatus | null  // null: no Azure Kinect node (e.g. in the sim)
   events: LogEvent[]
   tools: Tool[]
+  replay: Replay | null  // null: live
 }
 
 // GET /api/calibration (all positions in pixels or metres).

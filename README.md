@@ -313,8 +313,8 @@ The same from a terminal: `ros2 service call /scrubnurse_controller/resume std_s
 
 Add `record:=true` to `real.launch.py` or `sim.launch.py` to save the run to
 `~/scrubnurse_runs/<date_time>/` (MCAP; `record_dir:=` for another folder). It holds the
-controller status, detections, voice, arm joints and the camera as JPEG (several MB/s on the
-real cell at 30 fps: check the free disk space).
+controller status, detections, voice, arm joints and model, the nodes' log and the camera as
+JPEG (about 4 MB/s on the real cell at 30 fps: check the free disk space).
 
 Per-cycle times and failures of a run, also written to `cycles.csv` in the run folder:
 
@@ -329,11 +329,18 @@ handover: 1 of 1 ok, mean 15.3 s, slowest 15.3 s
 return: 1 of 1 ok, mean 37.4 s, slowest 37.4 s
 ```
 
-Watch a run again on the dashboard (http://localhost:8080, badge **REPLAY**, controls off):
+Watch a run again on the dashboard (http://localhost:8080, badge **REPLAY**, controls off)
+and the arm in RViz (`rviz:=false` to skip it):
 
 ```bash
 ros2 launch scrubnurse_bringup replay.launch.py run:=$HOME/scrubnurse_runs/<date_time>
 ```
+
+The timeline plays, pauses, jumps and changes the speed; its marks are the handovers (H) and
+returns (R), green when they succeeded, and a click jumps to one. The log shows what every node
+logged up to that moment, filtered by level or node; a click on a time jumps there. At the end
+the run starts over, paused. After a jump while paused, the camera and the arm update once you
+press Play. Runs recorded before the log and the robot model were added show neither.
 
 Nothing moves during a replay: it runs on its own ROS domain (99) on this PC only, and the
 recorded instrument requests are played as `/replayed/tool_request`, so a running cell never

@@ -51,7 +51,7 @@ RECORDED_TOPICS = [
     '/scrubnurse_controller/cycle', '/scrubnurse_controller/status', '/tool_request',
     '/tool_detections_2d', '/tool_detections', '/voice_command/events', '/voice_command/status',
     '/voice_command/transcript', '/kinect_camera/status', '/joint_states', '/tf', '/tf_static',
-    RECORDED_CAMERA + '/compressed',
+    '/robot_description', '/rosout', RECORDED_CAMERA + '/compressed',
 ]
 
 

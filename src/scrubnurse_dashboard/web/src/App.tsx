@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import CalibrationPage from './Calibration'
-import type { Action, CameraStatus, Cycle, Detection, Health, LogEvent, State, Tool, VoiceEvent, VoiceStatus } from './types'
+import type { Action, CameraStatus, Cycle, Detection, Health, LogEvent, Replay, State, Tool, VoiceEvent, VoiceStatus } from './types'
 
 const UR_JOINTS = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
   'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
@@ -28,6 +28,7 @@ async function post(path: string, body?: object): Promise<{ ok: boolean; text: s
 }
 
 const clock = (t: number) => new Date(t * 1000).toLocaleTimeString([], { hour12: false })
+const minutes = (s: number) => `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`
 
 /** Latest state from /ws/state; reconnects every second while the dashboard node is down. */
 function useDashboardState() {
@@ -72,14 +73,15 @@ export default function App() {
       <Header state={state} connected={connected} page={page} />
       {page === 'calibration' ? <CalibrationPage /> : !state ? <p className="waiting">Connecting to the dashboard node…</p> : (
         <main>
+          {state.replay && <Timeline replay={state.replay} />}
           <div className="column">
             <StatusPanel cycle={state.cycle} />
-            <Controls state={state} />
-            <VoicePanel voice={state.voice} status={state.voice_status} />
+            {!state.replay && <Controls state={state} />}
+            <VoicePanel voice={state.voice} status={state.voice_status} replay={!!state.replay} />
           </div>
           <div className="column">
             <CameraPanel health={state.health} detections={state.detections} streamKey={connections}
-              camera={state.camera_status} />
+              camera={state.camera_status} replay={!!state.replay} />
             {state.mode === 'sim' && !state.health.topics.camera.stale && (  // both sim cameras need camera:=true
               <section>
                 <h2>Simulation</h2>
@@ -90,7 +92,7 @@ export default function App() {
             )}
           </div>
           <ArmPanel arm={state.arm} health={state.health} />
-          <EventLog events={state.events} />
+          <EventLog events={state.events} replay={state.replay} />
         </main>
       )}
     </>
@@ -118,6 +120,46 @@ function Header({ state, connected, page }: { state: State | null; connected: bo
         </>}
       </div>
     </header>
+  )
+}
+
+const RATES = [0.25, 0.5, 1, 2, 4]
+
+/** Play, pause, jump and speed of a recorded run; the marks are its handovers and returns. */
+function Timeline({ replay }: { replay: Replay }) {
+  const [dragged, setDragged] = useState<number | null>(null)  // slider position while moving it
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
+  const send = async (path: string, body?: object) => {
+    const r = await post(`/api/replay/${path}`, body)
+    setResult(r.ok ? null : r)
+  }
+  const seek = (time: number) => send('seek', { time })
+  const commit = () => { if (dragged !== null) { seek(dragged); setDragged(null) } }
+  const time = dragged ?? replay.time
+  const at = (t: number) => `${(100 * t / replay.duration).toFixed(2)}%`
+  return (
+    <section className="timeline">
+      <div className="buttons">
+        <button onClick={() => send(replay.paused ? 'resume' : 'pause')}>{replay.paused ? 'Play' : 'Pause'}</button>
+        <span className="clock">{minutes(time)} / {minutes(replay.duration)}</span>
+        <label>Speed{' '}
+          <select value={replay.rate} onChange={e => send('rate', { rate: Number(e.target.value) })}>
+            {RATES.map(r => <option key={r} value={r}>{r}×</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="track">
+        {replay.cycles.map(c => (
+          <button key={c.cycle} className={`mark ${c.result === 'ok' ? 'ok' : c.result === 'unfinished' ? '' : 'alert'}`}
+            style={{ left: at(c.start), width: c.seconds ? at(c.seconds) : undefined }}
+            title={`${c.kind} of the ${c.tool}: ${c.result}${c.seconds ? `, ${c.seconds} s` : ''}`}
+            onClick={() => seek(c.start)}>{c.kind === 'handover' ? 'H' : 'R'}</button>
+        ))}
+      </div>
+      <input type="range" min={0} max={replay.duration} step={0.1} value={time} aria-label="Replay position"
+        onChange={e => setDragged(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+      {result && <p className="alert" role="status">{result.text}</p>}
+    </section>
   )
 }
 
@@ -231,14 +273,15 @@ function ArmPanel({ arm, health }: { arm: State['arm']; health: Health }) {
   )
 }
 
-function CameraPanel({ health, detections, streamKey, camera: status }:
-  { health: Health; detections: Detection[]; streamKey: number; camera: CameraStatus | null }) {
+function CameraPanel({ health, detections, streamKey, camera: status, replay }:
+  { health: Health; detections: Detection[]; streamKey: number; camera: CameraStatus | null; replay: boolean }) {
   const camera = health.topics.camera
   const detector = health.topics.detections
   return (
     <section>
       <h2>Camera and detection</h2>
-      {status && <CameraChoice status={status} />}
+      {status && (replay ? <p className="muted">Camera {status.serial}
+        {status.serial === status.configured_serial ? ' (calibrated, overhead)' : ''}</p> : <CameraChoice status={status} />)}
       <div className="camera">
         <img key={streamKey} src="/stream/camera" alt="Overhead camera with the detected instruments" />
         {camera.stale && (
@@ -308,7 +351,7 @@ const VOICE_STATES: Record<VoiceStatus['state'], [string, string]> = {
 /** The device name without the ALSA card number, which changes between boots. */
 const stableName = (device: string) => device.replace(/\s*\(hw:[^)]*\)$/, '')
 
-function VoicePanel({ voice, status }: { voice: VoiceEvent[]; status: VoiceStatus | null }) {
+function VoicePanel({ voice, status, replay }: { voice: VoiceEvent[]; status: VoiceStatus | null; replay: boolean }) {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
   async function send(path: string, body?: object) {
@@ -323,7 +366,8 @@ function VoicePanel({ voice, status }: { voice: VoiceEvent[]; status: VoiceStatu
     <section>
       <h2>Voice <span className={`tag ${tagClass}`} aria-live="polite">{tagText}</span></h2>
       {status?.state === 'error' && <p className="alert">{status.message}</p>}
-      {status && (
+      {status && replay && <p className="muted">Microphone: {status.input_device || 'system default'}</p>}
+      {status && !replay && (
         <>
           <div className="buttons">
             <button disabled={busy || status.state === 'command' || status.state === 'processing'}
@@ -367,14 +411,40 @@ function VoicePanel({ voice, status }: { voice: VoiceEvent[]; status: VoiceStatu
   )
 }
 
-function EventLog({ events }: { events: LogEvent[] }) {
+const LEVELS: LogEvent['level'][] = ['info', 'warn', 'error']
+
+/** Newest first; in a replay the run's log up to now, and a click jumps to the line. */
+function EventLog({ events, replay }: { events: LogEvent[]; replay: Replay | null }) {
+  const [level, setLevel] = useState<LogEvent['level']>('info')
+  const [source, setSource] = useState('')
+  const sources = [...new Set(events.map(e => e.source))].sort()
+  const shown = events.filter(e => LEVELS.indexOf(e.level) >= LEVELS.indexOf(level)
+    && (!source || e.source === source))
   return (
     <section className="log">
-      <h2>Event log</h2>
+      <h2>{replay ? 'Log' : 'Event log'}</h2>
+      <div className="device-choice">
+        <label>Level{' '}
+          <select value={level} onChange={e => setLevel(e.target.value as LogEvent['level'])}>
+            <option value="info">all</option>
+            <option value="warn">warnings and errors</option>
+            <option value="error">errors</option>
+          </select>
+        </label>{' '}
+        <label>From{' '}
+          <select value={source} onChange={e => setSource(e.target.value)}>
+            <option value="">everyone</option>
+            {sources.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+      </div>
       <ul>
-        {events.map((e, i) => (
-          <li key={events.length - i} className={e.level}>
-            <span className="time">{clock(e.time)}</span>
+        {shown.length === 0 && <li className="muted">Nothing logged{level !== 'info' || source ? ' with this filter' : ''}.</li>}
+        {shown.map((e, i) => (
+          <li key={shown.length - i} className={e.level}>
+            {replay ? <button className="time link" title="Replay from 2 s before this line"
+              onClick={() => post('/api/replay/seek', { time: Math.max(0, e.time - replay.start - 2) })}>
+              {clock(e.time)}</button> : <span className="time">{clock(e.time)}</span>}
             <span className="source">{e.source}</span>
             {e.text}
           </li>

@@ -9,13 +9,15 @@ abort, recover and tool requests, which call the controller's services or
 publish on `tool_request`. Voice: mute, push-to-talk and the microphone (parameters
 and ~/listen of the voice node); camera: which Azure Kinect streams (parameter
 `serial` of kinect_camera). The calibration page records camera-to-table pairs
-(see calibration.py).
+(see calibration.py). In mode replay it shows the recorded run `run` (see replay.py and
+replay.launch.py) and drives the bag player: pause, resume, jump and speed.
 
 The page is built separately and installed with the package if present:
 `cd web && npm ci && npm run build`, then colcon build.
 """
 
 import collections
+import math
 import os
 import threading
 import time
@@ -32,7 +34,9 @@ from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from rclpy.signals import SignalHandlerOptions
 from rclpy.time import Time
-from scrubnurse_dashboard import state
+from rosbag2_interfaces.srv import Pause, Resume, Seek, SetRate
+from rosgraph_msgs.msg import Clock
+from scrubnurse_dashboard import replay, state
 from scrubnurse_dashboard.app import create_app
 from scrubnurse_dashboard.calibration import Calibration, find_block
 from scrubnurse_interfaces.msg import CameraStatus, CycleStatus, VoiceEvent, VoiceStatus
@@ -46,6 +50,7 @@ from vision_msgs.msg import Detection2DArray, Detection3DArray
 CONTROLLER = '/scrubnurse_controller'
 VOICE = '/voice_command'
 CAMERA = '/kinect_camera'
+PLAYER = '/rosbag2_player'
 STALE_AFTER = {'joint_states': 1.0, 'camera': 2.0, 'detections': 2.0}  # s
 STREAM_WIDTH = 1280  # px, camera stream
 
@@ -100,8 +105,21 @@ class DashboardNode(Node):
         self._health = {}
         self._stale = {}
 
+        self._run = None
+        if self.mode == 'replay':
+            self._run = replay.Run.read(os.path.expanduser(
+                self.declare_parameter('run', '').value), self.tool_names)
+            self._playhead = self._run.start
+            self._paused, self._rate = False, 1.0
+            self._seeked = 0.0  # time.monotonic() of the last jump
+            self.create_subscription(Clock, '/clock', self._on_clock, qos_profile_sensor_data)
+            self._player = {name: self.create_client(srv, f'{PLAYER}/{name}') for name, srv in (
+                ('pause', Pause), ('resume', Resume), ('seek', Seek), ('set_rate', SetRate))}
+
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.create_subscription(CycleStatus, f'{CONTROLLER}/cycle', self._on_cycle, latched)
+        if self._run is None:  # replay: read from the bag (replay.Run)
+            self.create_subscription(CycleStatus, f'{CONTROLLER}/cycle', self._on_cycle, latched)
+            self.create_subscription(VoiceEvent, f'{VOICE}/events', self._on_voice, 10)
         self.create_subscription(JointState, '/joint_states', self._on_joints,
                                  qos_profile_sensor_data)
         self.create_subscription(Image, 'image', self._on_image, qos_profile_sensor_data)
@@ -110,7 +128,6 @@ class DashboardNode(Node):
                                      qos_profile_sensor_data)
         self.create_subscription(Detection2DArray, '/tool_detections_2d', self._on_detections, 10)
         self.create_subscription(Detection3DArray, '/tool_detections', self._on_positions, 10)
-        self.create_subscription(VoiceEvent, f'{VOICE}/events', self._on_voice, 10)
         self.create_subscription(VoiceStatus, f'{VOICE}/status', self._on_voice_status, latched)
         self.create_subscription(CameraStatus, f'{CAMERA}/status', self._on_camera_status, latched)
         self._listen = self.create_client(Trigger, f'{VOICE}/listen')
@@ -125,17 +142,12 @@ class DashboardNode(Node):
     # ROS side
 
     def _on_cycle(self, msg):
-        cycle = {name: getattr(msg, name) for name in (
-            'cycle_id', 'kind', 'tool_id', 'tool_name', 'phase', 'description', 'step',
-            'step_count', 'paused', 'aborted', 'error')}
-        cycle['queue'] = [{'tool_id': t, 'tool_name': self.tool_names.get(t, '')}
-                          for t in msg.queue]
+        cycle = state.cycle_dict(msg, self.tool_names)
         with self._lock:
             changed = self._cycle is None or self._cycle['description'] != msg.description
             self._cycle = cycle
         if changed:
-            level = 'error' if msg.error else 'warn' if msg.aborted else 'info'
-            self.log(level, 'controller', msg.description)
+            self.log(state.cycle_level(cycle), 'controller', msg.description)
 
     def _on_joints(self, msg):
         # Moving: from the positions 0.2 s ago, since fake hardware reports no velocities.
@@ -173,8 +185,7 @@ class DashboardNode(Node):
             self._positions = positions
 
     def _on_voice(self, msg):
-        event = {'time': time.time(), 'kind': msg.kind, 'text': msg.text,
-                 'wake_word': msg.wake_word, 'tool_id': msg.tool_id, 'tool_name': msg.tool_name}
+        event = state.voice_dict(msg, time.time())
         with self._lock:
             self._voice.appendleft(event)
         if msg.kind == 'error':
@@ -203,15 +214,29 @@ class DashboardNode(Node):
         else:
             self.log('info', 'camera', f'streaming {msg.serial}')
 
+    def _on_clock(self, msg):
+        t = Time.from_msg(msg.clock).nanoseconds / 1e9
+        with self._lock:
+            wrapped = t < self._playhead - 1.0 and time.monotonic() - self._seeked > 2.0
+            self._playhead = t
+        if wrapped and not self._paused:  # the player loops: stop at the start, not replay it
+            self._paused = True
+            self._player['pause'].call_async(Pause.Request())
+
+    def _stale_after(self, topic):
+        # A paused replay sends nothing: its last messages are still the current ones.
+        return math.inf if self._run is not None and self._paused else STALE_AFTER[topic]
+
     def _update_health(self):
         now = time.monotonic()
         with self._lock:
-            topics = {name: state.freshness(self._received[name], now, limit)
-                      for name, limit in STALE_AFTER.items()}
+            topics = {name: state.freshness(self._received[name], now, self._stale_after(name))
+                      for name in STALE_AFTER}
         health = {
             'mode': self.mode,
             'node': True,
-            'controller': self._triggers['pause'].service_is_ready(),
+            'controller': (self._triggers['pause'].service_is_ready() if self._run is None
+                           else bool(self._run.cycles)),
             'voice': self.count_publishers(f'{VOICE}/events') > 0,
             'camera_node': self.count_publishers(f'{CAMERA}/status') > 0,
             'topics': topics,
@@ -250,7 +275,7 @@ class DashboardNode(Node):
     def snapshot(self):
         allowed = {action: self.refusal(action) for action in state.ACTIONS}
         with self._lock:
-            return {
+            snapshot = {
                 'mode': self.mode,
                 'health': self._health,
                 'cycle': self._cycle,
@@ -263,7 +288,37 @@ class DashboardNode(Node):
                 'camera_status': self._camera_status if self._health.get('camera_node') else None,
                 'events': list(self._events),
                 'tools': [{'tool_id': k, 'tool_name': v} for k, v in self.tool_names.items()],
+                'replay': None,
             }
+            if self._run is None:
+                return snapshot
+            run, playhead = self._run, self._playhead
+            snapshot['replay'] = {'start': run.start, 'duration': run.end - run.start,
+                                  'time': playhead - run.start, 'paused': self._paused,
+                                  'rate': self._rate, 'cycles': run.markers}
+        snapshot.update(run.at(playhead))
+        return snapshot
+
+    def replay(self, action, value=None):
+        """Pause, resume, seek (s from the start) or set_rate of the bag player."""
+        if self._run is None:
+            return False, 'not a replay'
+        if action == 'seek':
+            self._seeked = time.monotonic()
+            request = Seek.Request(
+                time=Time(nanoseconds=int((self._run.start + value) * 1e9)).to_msg())
+        elif action == 'set_rate':
+            request = SetRate.Request(rate=value)
+        else:
+            request = self._player[action].srv_type.Request()
+        response = self._call(self._player[action], request, 'the bag player')
+        if getattr(response, 'success', True):  # pause and resume answer nothing
+            if action in ('pause', 'resume'):
+                self._paused = action == 'pause'
+            elif action == 'set_rate':
+                self._rate = value
+            return True, ''
+        return False, f'{action} refused'
 
     def call(self, action):
         """Call a controller Trigger service; return (success, message)."""
@@ -370,7 +425,7 @@ class DashboardNode(Node):
             msg, detections = self._image, self._detections
             cached_msg, cached = self._jpeg
             fresh = not state.freshness(self._received['detections'], time.monotonic(),
-                                        STALE_AFTER['detections'])['stale']
+                                        self._stale_after('detections'))['stale']
         if msg is None or msg is cached_msg:
             return cached
         image = self._bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
