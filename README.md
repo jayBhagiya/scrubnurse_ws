@@ -338,6 +338,10 @@ and the arm in RViz (`rviz:=false` to skip it):
 ros2 launch scrubnurse_bringup replay.launch.py run:=$HOME/scrubnurse_runs/<date_time>
 ```
 
+[![Replay of a real-cell run (YouTube)](docs/media/replay.jpg)](https://youtu.be/INwDcpz_KJM)
+
+*▶ [Watch a replay](https://youtu.be/INwDcpz_KJM): timeline, log and the arm in RViz.*
+
 The timeline plays, pauses, jumps and changes the speed; its marks are the handovers (H) and
 returns (R), green when they succeeded, and a click jumps to one. The log shows what every node
 logged up to that moment, filtered by level or node; a click on a time jumps there. At the end
