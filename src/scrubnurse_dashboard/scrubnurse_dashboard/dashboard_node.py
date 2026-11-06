@@ -34,7 +34,7 @@ from rclpy.parameter import Parameter
 from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
 from rclpy.signals import SignalHandlerOptions
 from rclpy.time import Time
-from rosbag2_interfaces.srv import Pause, Resume, Seek, SetRate
+from rosbag2_interfaces.srv import Burst, Pause, Resume, Seek, SetRate
 from rosgraph_msgs.msg import Clock
 from scrubnurse_dashboard import replay, state
 from scrubnurse_dashboard.app import create_app
@@ -51,6 +51,7 @@ CONTROLLER = '/scrubnurse_controller'
 VOICE = '/voice_command'
 CAMERA = '/kinect_camera'
 PLAYER = '/rosbag2_player'
+BURST = 200  # messages played after a jump while paused: on the real cell about 0.2 s, 5 frames
 STALE_AFTER = {'joint_states': 1.0, 'camera': 2.0, 'detections': 2.0}  # s
 STREAM_WIDTH = 1280  # px, camera stream
 
@@ -114,7 +115,8 @@ class DashboardNode(Node):
             self._seeked = 0.0  # time.monotonic() of the last jump
             self.create_subscription(Clock, '/clock', self._on_clock, qos_profile_sensor_data)
             self._player = {name: self.create_client(srv, f'{PLAYER}/{name}') for name, srv in (
-                ('pause', Pause), ('resume', Resume), ('seek', Seek), ('set_rate', SetRate))}
+                ('pause', Pause), ('resume', Resume), ('seek', Seek), ('set_rate', SetRate),
+                ('burst', Burst))}
 
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         if self._run is None:  # replay: read from the bag (replay.Run)
@@ -317,6 +319,9 @@ class DashboardNode(Node):
                 self._paused = action == 'pause'
             elif action == 'set_rate':
                 self._rate = value
+            elif self._paused:  # seek: show the camera and the arm of the new moment too
+                self._call(self._player['burst'], Burst.Request(num_messages=BURST),
+                           'the bag player')
             return True, ''
         return False, f'{action} refused'
 

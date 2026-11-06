@@ -339,8 +339,7 @@ ros2 launch scrubnurse_bringup replay.launch.py run:=$HOME/scrubnurse_runs/<date
 The timeline plays, pauses, jumps and changes the speed; its marks are the handovers (H) and
 returns (R), green when they succeeded, and a click jumps to one. The log shows what every node
 logged up to that moment, filtered by level or node; a click on a time jumps there. At the end
-the run starts over, paused. After a jump while paused, the camera and the arm update once you
-press Play. Runs recorded before the log and the robot model were added show neither.
+the run starts over, paused. Runs recorded before the log and the robot model were added show neither.
 
 Nothing moves during a replay: it runs on its own ROS domain (99) on this PC only, and the
 recorded instrument requests are played as `/replayed/tool_request`, so a running cell never

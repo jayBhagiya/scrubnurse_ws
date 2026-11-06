@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import CalibrationPage from './Calibration'
 import type { Action, CameraStatus, Cycle, Detection, Health, LogEvent, Replay, State, Tool, VoiceEvent, VoiceStatus } from './types'
 
@@ -134,7 +134,15 @@ function Timeline({ replay }: { replay: Replay }) {
     setResult(r.ok ? null : r)
   }
   const seek = (time: number) => send('seek', { time })
-  const commit = () => { if (dragged !== null) { seek(dragged); setDragged(null) } }
+  // The native change event comes once the slider is let go (or per arrow key); React's
+  // onChange fires on every move. Keep the dragged position until the player has jumped.
+  const slider = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    const input = slider.current!
+    const jump = async () => { await seek(Number(input.value)); setDragged(null) }
+    input.addEventListener('change', jump)
+    return () => input.removeEventListener('change', jump)
+  })
   const time = dragged ?? replay.time
   const at = (t: number) => `${(100 * t / replay.duration).toFixed(2)}%`
   return (
@@ -156,8 +164,8 @@ function Timeline({ replay }: { replay: Replay }) {
             onClick={() => seek(c.start)}>{c.kind === 'handover' ? 'H' : 'R'}</button>
         ))}
       </div>
-      <input type="range" min={0} max={replay.duration} step={0.1} value={time} aria-label="Replay position"
-        onChange={e => setDragged(Number(e.target.value))} onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+      <input ref={slider} type="range" min={0} max={replay.duration} step={0.1} value={time}
+        aria-label="Replay position" onChange={e => setDragged(Number(e.target.value))} />
       {result && <p className="alert" role="status">{result.text}</p>}
     </section>
   )
