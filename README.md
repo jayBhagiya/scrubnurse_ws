@@ -61,7 +61,8 @@ camera ─► tool_detector ──(/tool_detections_2d)─► tool_localizer ─
 4. **Control:** `scrubnurse_controller` serves requests first. When none are queued, it returns
    tools lying in the table's return area. It moves between taught poses with MoveIt 2.
 5. **Dashboard:** status, controls, the camera view with each detected tool in its own colour,
-   the voice panel, the arm state, an event log and the calibration page.
+   the voice panel, the arm state, an event log and the calibration page; it also replays
+   recorded runs.
 
 | Id | Instrument | | Id | Instrument |
 |---|---|---|---|---|
@@ -314,7 +315,8 @@ The same from a terminal: `ros2 service call /scrubnurse_controller/resume std_s
 Add `record:=true` to `real.launch.py` or `sim.launch.py` to save the run to
 `~/scrubnurse_runs/<date_time>/` (MCAP; `record_dir:=` for another folder). It holds the
 controller status, detections, voice, arm joints and model, the nodes' log and the camera as
-JPEG (about 4 MB/s on the real cell at 30 fps: check the free disk space).
+JPEG (about 4 MB/s on the real cell at 30 fps: check the free disk space). The Docker
+simulation doesn't record.
 
 Per-cycle times and failures of a run, also written to `cycles.csv` in the run folder:
 
@@ -339,7 +341,7 @@ ros2 launch scrubnurse_bringup replay.launch.py run:=$HOME/scrubnurse_runs/<date
 The timeline plays, pauses, jumps and changes the speed; its marks are the handovers (H) and
 returns (R), green when they succeeded, and a click jumps to one. The log shows what every node
 logged up to that moment, filtered by level or node; a click on a time jumps there. At the end
-the run starts over, paused. Runs recorded before the log and the robot model were added show neither.
+the run starts over, paused.
 
 Nothing moves during a replay: it runs on its own ROS domain (99) on this PC only, and the
 recorded instrument requests are played as `/replayed/tool_request`, so a running cell never
@@ -385,7 +387,7 @@ Gazebo). With `--symlink-install`, edits apply on the next launch without a rebu
 
 | Symptom | Fix |
 |---|---|
-| Dashboard page is empty (`{"detail":"Not Found"}`) | The page isn't built: `cd src/scrubnurse_dashboard/web && npm ci && npm run build`, then rebuild with colcon. |
+| Dashboard page is empty (`{"detail":"Not Found"}`) or blank | The page isn't built or installed: `cd src/scrubnurse_dashboard/web && npm ci && npm run build`, then always rebuild with colcon. |
 | `ros2: command not found` or packages not found | `source scripts/activate.sh` in this terminal (`./scripts/setup_venv.sh` first if there is no venv). |
 | Nothing moves after launch | The controller starts paused: press **Resume**. |
 | No camera images or *Simulation* panel in the simulation | Start `sim.launch.py` with `camera:=true`; the cameras start once the arm controllers are up. |
